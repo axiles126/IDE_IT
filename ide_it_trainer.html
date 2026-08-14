@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>IDE_IT — тренажер IT-сфери</title>
+<style>
+:root{
+  --bg:#0a0e12;--panel:#10171f;--panel2:#0c1219;--raise:#15202b;--line:#1d2a36;--line2:#26384a;
+  --ink:#cbd6de;--ink2:#9fb0bc;--dim:#64757f;
+  --amber:#f0a830;--green:#5fd38a;--red:#e5544b;--cyan:#4cc6d6;--violet:#9a8be0;
+  --mono:ui-monospace,'SFMono-Regular',Menlo,Consolas,'Liberation Mono',monospace;
+  --body:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --hdr:52px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.45;
+  -webkit-font-smoothing:antialiased;display:flex;flex-direction:column;min-height:100dvh;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  overflow:hidden;
+}
+button,input,textarea,select{font-family:inherit;color:inherit}
+button{cursor:pointer;background:none;border:none}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:var(--line2);border-radius:4px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ---------- шапка ---------- */
+header{
+  flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:8px 12px;
+  background:linear-gradient(180deg,#0c131b,#0a0e12);border-bottom:1px solid var(--line);
+}
+.logo{display:flex;align-items:center;gap:8px;min-width:0}
+.logo svg{width:26px;height:26px;flex:0 0 auto;color:var(--amber)}
+.logo .nm{font-family:var(--mono);font-weight:700;letter-spacing:2px;font-size:15px;white-space:nowrap}
+.logo .sub{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:1px;white-space:nowrap}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0}
+.pill{font-family:var(--mono);font-size:10.5px;letter-spacing:1px;text-transform:uppercase;
+  border:1px solid var(--line2);border-radius:999px;padding:4px 10px;background:var(--panel2);white-space:nowrap}
+.pill.ok{color:var(--green);border-color:#2a5e3e}
+.pill.off{color:var(--dim)}
+.pill.warn{color:var(--amber);border-color:#5a4520}
+
+/* ---------- навігація ---------- */
+nav{
+  flex:0 0 auto;display:flex;gap:2px;padding:0 6px;background:var(--panel2);
+  border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none;
+}
+nav::-webkit-scrollbar{display:none}
+nav button{
+  font-family:var(--mono);font-size:11.5px;letter-spacing:1px;text-transform:uppercase;color:var(--dim);
+  padding:10px 12px;border-bottom:2px solid transparent;white-space:nowrap;min-height:40px;
+}
+nav button.on{color:var(--green);border-bottom-color:var(--green)}
+nav button:hover{color:var(--ink)}
+
+/* ---------- каркас ---------- */
+main{flex:1 1 auto;min-height:0;position:relative}
+.tab{position:absolute;inset:0;display:none;overflow:auto;padding:10px;-webkit-overflow-scrolling:touch}
+.tab.on{display:block}
+.tab.ide.on{display:grid}
+.wrap{max-width:960px;margin:0 auto}
+
+/* ---------- IDE ---------- */
+.ide{
+  gap:8px;padding:8px;grid-template-columns:1fr;grid-template-rows:1fr auto;
+  grid-template-areas:"pane" "switch";overflow:hidden;
+}
+.pane{
+  grid-area:pane;display:none;flex-direction:column;min-height:0;min-width:0;
+  background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden;
+}
+body[data-pane="files"] .pane.files,
+body[data-pane="code"]  .pane.code,
+body[data-pane="task"]  .pane.task,
+body[data-pane="run"]   .pane.run{display:flex}
+.paneh{
+  flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:7px 10px;
+  border-bottom:1px solid var(--line);background:var(--panel2);
+}
+.paneh .t{font-family:var(--mono);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim)}
+.paneh .r{margin-left:auto;display:flex;gap:6px;align-items:center}
+.paneb{flex:1 1 auto;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch}
+
+/* перемикач панелей (вузькі екрани) */
+.switch{grid-area:switch;display:flex;gap:4px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:4px}
+.switch button{
+  flex:1;font-family:var(--mono);font-size:10.5px;letter-spacing:.5px;text-transform:uppercase;
+  color:var(--dim);padding:9px 4px;border-radius:4px;min-height:40px;
+}
+.switch button.on{background:var(--raise);color:var(--cyan)}
+
+/* дерево файлів */
+.tree{padding:6px}
+.tree button{
+  display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:9px 10px;border-radius:4px;
+  font-family:var(--mono);font-size:12.5px;color:var(--ink2);min-height:38px;
+}
+.tree button.on{background:var(--raise);color:var(--cyan)}
+.tree button .dot{width:6px;height:6px;border-radius:50%;background:var(--line2);flex:0 0 auto}
+.tree button.on .dot{background:var(--cyan)}
+.tree .grp{font-family:var(--mono);font-size:9.5px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);padding:8px 10px 4px}
+
+/* редактор */
+.edwrap{display:flex;height:100%;min-height:0;background:#080c10}
+.gutter{
+  flex:0 0 auto;padding:10px 6px 10px 10px;text-align:right;font-family:var(--mono);font-size:12px;line-height:1.6;
+  color:#3a4a57;background:#080c10;user-select:none;overflow:hidden;white-space:pre;
+}
+.editor{
+  flex:1 1 auto;min-width:0;padding:10px 10px 10px 4px;background:#080c10;border:none;outline:none;resize:none;
+  font-family:var(--mono);font-size:12px;line-height:1.6;color:#d6e6dd;white-space:pre;overflow:auto;tab-size:2;
+}
+.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{
+  font-family:var(--mono);font-size:11px;padding:6px 9px;border-radius:4px;color:var(--dim);white-space:nowrap;min-height:32px;
+}
+.tabs button.on{background:var(--raise);color:var(--ink)}
+.tabs button .md{color:var(--amber)}
+
+/* завдання */
+.taskb{padding:12px}
+.mrole{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;letter-spacing:1.2px;
+  text-transform:uppercase;color:var(--violet);border:1px solid #3a3360;border-radius:999px;padding:3px 9px;background:#15131f}
+.mtitle{font-size:17px;font-weight:600;margin:9px 0 6px}
+.mbrief{font-size:13.5px;color:var(--ink2);line-height:1.6;white-space:pre-wrap}
+.mwhy{margin-top:10px;border-left:2px solid var(--violet);padding:6px 0 6px 10px;font-size:12.5px;color:var(--ink2);line-height:1.6}
+.mwhy b{color:var(--ink)}
+.steps{margin:12px 0 0;display:flex;flex-direction:column;gap:7px}
+.step{border:1px solid var(--line);border-radius:5px;padding:9px 11px;background:var(--panel2)}
+.step.done{border-color:#2a5e3e;background:#0e1d14}
+.step .sh{display:flex;gap:8px;align-items:flex-start}
+.step .mark{font-family:var(--mono);color:var(--dim);flex:0 0 auto}
+.step.done .mark{color:var(--green)}
+.step .st{font-size:13px;line-height:1.5}
+.step .hint{margin-top:7px;font-size:12px;color:var(--amber);border-top:1px dashed var(--line2);padding-top:7px;white-space:pre-wrap}
+.quiz{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.quiz button{
+  text-align:left;border:1px solid var(--line);border-radius:4px;padding:9px 11px;background:var(--bg);
+  font-size:12.5px;color:var(--ink2);min-height:40px;
+}
+.quiz button:hover{border-color:var(--cyan)}
+.quiz button.pick{border-color:var(--green);color:var(--green)}
+.quiz button.bad{border-color:var(--red);color:var(--red)}
+
+/* консоль */
+.con{padding:10px;font-family:var(--mono);font-size:11.5px;line-height:1.65}
+.con .ln{display:flex;gap:8px;padding:2px 0;border-bottom:1px dashed rgba(38,56,74,.4);word-break:break-word}
+.con .ln:last-child{border:none}
+.con .t{color:var(--dim);flex:0 0 auto}
+.con .log{color:var(--ink2)}.con .ok{color:var(--green)}.con .warn{color:var(--amber)}
+.con .error{color:var(--red)}.con .info{color:var(--cyan)}.con .ai{color:var(--violet)}
+.preview{width:100%;height:100%;min-height:200px;border:none;background:#fff;display:block}
+.runbox{display:flex;flex-direction:column;height:100%;min-height:0}
+.runbox .frame{flex:1 1 auto;min-height:0;background:#fff}
+
+/* ---------- кнопки ---------- */
+.btn{
+  font-family:var(--mono);font-size:11px;letter-spacing:1px;text-transform:uppercase;
+  padding:8px 12px;border-radius:4px;border:1px solid var(--line2);background:var(--raise);color:var(--ink);
+  transition:.15s;min-height:36px;white-space:nowrap;
+}
+.btn:hover{border-color:var(--green);color:var(--green)}
+.btn.primary{background:linear-gradient(180deg,#2f8f56,#1c6b3a);border-color:#3aa968;color:#06140b;font-weight:700}
+.btn.primary:hover{filter:brightness(1.1);color:#06140b}
+.btn.ghost{background:transparent}
+.btn.sm{font-size:10px;padding:6px 9px;min-height:32px}
+.btn.danger:hover{border-color:var(--red);color:var(--red)}
+.btn:disabled{opacity:.4;cursor:not-allowed;border-color:var(--line);color:var(--dim)}
+.btn.wide{width:100%;justify-content:center}
+.row{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+
+/* ---------- картки / загальні ---------- */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:13px;margin-bottom:10px}
+h2.sec{font-family:var(--mono);font-weight:600;letter-spacing:2px;font-size:12px;text-transform:uppercase;
+  color:var(--ink2);margin:4px 0 10px;display:flex;align-items:center;gap:8px}
+h2.sec::before{content:'';width:3px;height:13px;background:var(--green);display:inline-block}
+.hint2{font-size:11.5px;color:var(--dim);font-family:var(--mono);line-height:1.6}
+.grid{display:grid;grid-template-columns:1fr;gap:9px}
+@media(min-width:560px){.grid{grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}}
+
+/* ролі */
+.role{border:1px solid var(--line);border-radius:6px;padding:11px;background:var(--panel2)}
+.role .rn{font-weight:600;font-size:14.5px}
+.role .rt{font-family:var(--mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--cyan);margin-top:2px}
+.role .rd{font-size:12.5px;color:var(--ink2);margin-top:7px;line-height:1.55}
+.role .ro{font-size:11.5px;color:var(--dim);margin-top:7px;font-family:var(--mono)}
+.role.hit{border-color:var(--violet)}
+.pipe{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.pipe .p{font-family:var(--mono);font-size:10.5px;border:1px solid var(--line2);border-radius:999px;
+  padding:6px 11px;color:var(--ink2);background:var(--panel2)}
+.pipe .p.on{border-color:var(--green);color:var(--green)}
+
+/* наставник */
+.mentor{display:grid;grid-template-columns:1fr;gap:10px}
+@media(min-width:760px){.mentor{grid-template-columns:220px 1fr}}
+.who{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+.who::-webkit-scrollbar{display:none}
+@media(min-width:760px){.who{flex-direction:column;overflow:visible}}
+.wb{flex:0 0 auto;text-align:left;border:1px solid var(--line);background:var(--panel2);border-radius:5px;
+  padding:9px 11px;min-width:150px;min-height:44px}
+.wb.on{border-color:var(--violet);background:#15131f}
+.wb.locked{opacity:.5;border-style:dashed}
+.wb .n{font-weight:600;font-size:13px}
+.wb .r{font-family:var(--mono);font-size:9.5px;color:var(--dim);text-transform:uppercase;margin-top:2px}
+.chat{display:flex;flex-direction:column;height:min(62vh,520px);min-height:300px;
+  border:1px solid var(--line);border-radius:6px;background:var(--panel2)}
+.msgs{flex:1;overflow-y:auto;padding:11px;display:flex;flex-direction:column;gap:8px}
+.msg{max-width:88%;padding:8px 11px;border-radius:8px;font-size:13px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+.msg.me{align-self:flex-end;background:#163040;border:1px solid #1e4456;color:#dff1f6}
+.msg.them{align-self:flex-start;background:var(--raise);border:1px solid var(--line)}
+.msg.sys{align-self:center;font-family:var(--mono);font-size:11px;color:var(--dim);background:none;text-align:center}
+.typing{align-self:flex-start;font-family:var(--mono);font-size:11px;color:var(--violet)}
+.composer{display:flex;gap:6px;padding:8px;border-top:1px solid var(--line)}
+.composer input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line2);border-radius:4px;
+  padding:10px;font-size:13px;min-height:42px}
+.composer input:focus{outline:none;border-color:var(--violet)}
+
+/* налаштування */
+.field{margin-bottom:12px}
+.field label{display:block;font-family:var(--mono);font-size:10px;letter-spacing:1.2px;
+  text-transform:uppercase;color:var(--dim);margin-bottom:5px}
+.field input,.field select{width:100%;background:var(--bg);border:1px solid var(--line2);border-radius:4px;
+  padding:10px;font-size:13px;min-height:42px}
+.field input:focus,.field select:focus{outline:none;border-color:var(--cyan)}
+.warnbox{border:1px dashed #5a4520;border-radius:5px;padding:10px;color:var(--amber);
+  font-size:12px;line-height:1.55;margin-bottom:12px}
+.bar{height:5px;background:#0a1117;border-radius:3px;overflow:hidden;margin-top:6px}
+.bar>i{display:block;height:100%;background:var(--green);border-radius:3px;transition:width .4s ease}
+
+/* ---------- адаптив: планшет ---------- */
+@media(min-width:720px){
+  .ide{
+    grid-template-columns:minmax(160px,190px) 1fr;
+    grid-template-rows:minmax(0,1.4fr) minmax(0,1fr);
+    grid-template-areas:"files code" "task run";
+  }
+  .pane.files{grid-area:files;display:flex}
+  .pane.code{grid-area:code;display:flex}
+  .pane.task{grid-area:task;display:flex}
+  .pane.run{grid-area:run;display:flex}
+  .switch{display:none}
+}
+/* ---------- адаптив: десктоп ---------- */
+@media(min-width:1080px){
+  .ide{
+    grid-template-columns:200px minmax(0,1.6fr) minmax(300px,1fr);
+    grid-template-rows:minmax(0,1.6fr) minmax(0,1fr);
+    grid-template-areas:"files code task" "files run task";
+  }
+}
+/* ---------- адаптив: альбомна орієнтація, низький екран ---------- */
+@media(orientation:landscape) and (max-height:620px){
+  header{padding:4px 10px}
+  .logo svg{width:20px;height:20px}
+  .logo .nm{font-size:13px}
+  .logo .sub{display:none}
+  nav button{padding:7px 10px;min-height:34px;font-size:10.5px}
+  .ide{gap:6px;padding:6px}
+  .chat{height:calc(100dvh - 190px);min-height:180px}
+  .taskb{padding:9px}
+  .mtitle{font-size:15px;margin:7px 0 4px}
+}
+@media(orientation:landscape) and (max-height:620px) and (min-width:640px){
+  .ide{
+    grid-template-columns:minmax(140px,170px) minmax(0,1.5fr) minmax(220px,1fr);
+    grid-template-rows:minmax(0,1.7fr) minmax(0,1fr);
+    grid-template-areas:"files code task" "files run task";
+  }
+  .pane.files,.pane.code,.pane.task,.pane.run{display:flex}
+  .switch{display:none}
+}
+/* дуже вузькі телефони */
+@media(max-width:359px){
+  .switch button{font-size:9.5px;padding:8px 2px}
+  .logo .sub{display:none}
+}
+</style>
+</head>
+<body data-pane="task">
+
+<header>
+  <div class="logo">
+    <!-- іконка: контур, прозорий фон, колір успадковується -->
+    <svg viewBox="0 0 64 64" aria-hidden="true" fill="none" stroke="currentColor"
+         stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M31.5 7.5c5.2 2.6 7.6 7.6 5.9 12.4-1 2.9-2.9 5.4-5.4 8.1"/>
+      <path d="M32 28c-3.4-2.6-4.6-6.6-2.6-9.8 1.6-2.6 1.9-5.4.1-8.4"/>
+      <path d="M20.5 40c-1.4-5.4 3.4-11 11.5-11s12.9 5.6 11.5 11"/>
+      <path d="M14.5 49.5c0-5.6 7.6-9.5 17.5-9.5s17.5 3.9 17.5 9.5S41.9 59 32 59s-17.5-3.9-17.5-9.5Z"/>
+      <ellipse cx="26" cy="47" rx="2.1" ry="2.8" fill="currentColor" stroke="none"/>
+      <ellipse cx="38" cy="47" rx="2.1" ry="2.8" fill="currentColor" stroke="none"/>
+      <path d="M27 54c1.4-1.7 3.1-2.5 5-2.5s3.6.8 5 2.5"/>
+    </svg>
+    <div style="min-width:0">
+      <div class="nm">IDE_IT</div>
+      <div class="sub">тренажер IT-сфери</div>
+    </div>
+  </div>
+  <div class="hdr-right">
+    <span class="pill" id="pillProgress">0 / 0</span>
+    <span class="pill off" id="pillAi">ШІ: —</span>
+  </div>
+</header>
+
+<nav id="nav">
+  <button data-tab="ide" class="on">Стажування</button>
+  <button data-tab="mentor">Наставник</button>
+  <button data-tab="roles">Ролі в IT</button>
+  <button data-tab="progress">Прогрес</button>
+  <button data-tab="settings">Налаштування</button>
+</nav>
+
+<main>
+  <!-- ===================== IDE ===================== -->
+  <section class="tab ide on" id="tab-ide">
+    <div class="pane files">
+      <div class="paneh"><span class="t">Проєкт</span>
+        <span class="r"><button class="btn sm ghost" id="resetFileBtn">скинути файл</button></span>
+      </div>
+      <div class="paneb"><div class="tree" id="tree"></div></div>
+    </div>
+
+    <div class="pane code">
+      <div class="paneh">
+        <div class="tabs" id="fileTabs"></div>
+        <span class="r"><button class="btn sm primary" id="runBtn">Зібрати ▸</button></span>
+      </div>
+      <div class="paneb" style="overflow:hidden">
+        <div class="edwrap">
+          <div class="gutter" id="gutter">1</div>
+          <textarea class="editor" id="editor" spellcheck="false" autocapitalize="off"
+                    autocorrect="off" autocomplete="off" wrap="off"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="pane task">
+      <div class="paneh"><span class="t">Завдання</span>
+        <span class="r" id="taskCounter"></span>
+      </div>
+      <div class="paneb"><div class="taskb" id="taskBody"></div></div>
+    </div>
+
+    <div class="pane run">
+      <div class="paneh"><span class="t" id="runTitle">Консоль</span>
+        <span class="r">
+          <button class="btn sm ghost" id="viewToggle">перегляд</button>
+          <button class="btn sm ghost" id="clearConBtn">очистити</button>
+        </span>
+      </div>
+      <div class="paneb" id="runBody">
+        <div class="con" id="con"></div>
+      </div>
+    </div>
+
+    <div class="switch" id="switch">
+      <button data-pane="files">Файли</button>
+      <button data-pane="code">Код</button>
+      <button data-pane="task" class="on">Завдання</button>
+      <button data-pane="run">Запуск</button>
+    </div>
+  </section>
+
+  <!-- ===================== НАСТАВНИК ===================== -->
+  <section class="tab" id="tab-mentor">
+    <div class="wrap">
+      <h2 class="sec">Хто поруч</h2>
+      <p class="hint2" style="margin-bottom:10px">
+        Фахівці — це навички студії. Зайняті слоти відповідають на питання у своїй зоні;
+        вільні слоти чекають на нові навички.
+      </p>
+      <div class="mentor">
+        <div class="who" id="whoList"></div>
+        <div class="chat">
+          <div class="paneh"><span class="t" id="chatHead">—</span>
+            <span class="r"><button class="btn sm ghost" id="stopAiBtn" style="display:none">зупинити</button></span>
+          </div>
+          <div class="msgs" id="msgs"></div>
+          <div class="composer">
+            <input id="chatInput" placeholder="Питання…" autocomplete="off">
+            <button class="btn" id="sendBtn">▸</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== РОЛІ ===================== -->
+  <section class="tab" id="tab-roles">
+    <div class="wrap">
+      <h2 class="sec">Шлях продукту</h2>
+      <div class="card">
+        <div class="pipe" id="pipe"></div>
+        <div class="hint2">
+          Кожне завдання тренажера — це чийсь робочий день. Пройдені етапи підсвічені:
+          так видно, через скільки рук проходить одна кнопка в застосунку.
+        </div>
+      </div>
+      <h2 class="sec">Ролі та зони відповідальності</h2>
+      <div class="grid" id="rolesGrid"></div>
+    </div>
+  </section>
+
+  <!-- ===================== ПРОГРЕС ===================== -->
+  <section class="tab" id="tab-progress">
+    <div class="wrap">
+      <h2 class="sec">Стажування</h2>
+      <div class="card">
+        <div id="progSummary"></div>
+        <div class="bar"><i id="progBar" style="width:0%"></i></div>
+      </div>
+      <h2 class="sec">Місії</h2>
+      <div class="card"><div id="missionList"></div></div>
+      <h2 class="sec">Керування</h2>
+      <div class="card">
+        <div class="row">
+          <button class="btn ghost danger" id="resetAllBtn">Почати стажування спочатку ⟲</button>
+          <span class="hint2" id="saveStatus"></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== НАЛАШТУВАННЯ ===================== -->
+  <section class="tab" id="tab-settings">
+    <div class="wrap">
+      <h2 class="sec">Другий Claude — незалежний ревʼюер</h2>
+      <div class="card">
+        <div class="warnbox">
+          Ключ зберігається лише у цьому браузері й надсилається напряму до API Anthropic.
+          Не вводьте його на чужому пристрої. Кнопка «Прибрати ключ» стирає його зі стану й памʼяті сторінки.
+        </div>
+        <div class="field">
+          <label for="keyInput">API-ключ другого акаунта</label>
+          <input id="keyInput" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="field">
+          <label for="roleSelect">Роль другого підключення</label>
+          <select id="roleSelect">
+            <option value="reviewer">Ревʼюер — окрема думка про код</option>
+            <option value="backup">Резерв — коли основний канал недоступний</option>
+          </select>
+        </div>
+        <div class="row">
+          <button class="btn primary" id="saveKeyBtn">Зберегти</button>
+          <button class="btn ghost" id="testKeyBtn">Перевірити зʼєднання</button>
+          <button class="btn ghost danger" id="clearKeyBtn">Прибрати ключ</button>
+        </div>
+        <div class="hint2" id="keyStatus" style="margin-top:10px"></div>
+      </div>
+
+      <h2 class="sec">Основний канал</h2>
+      <div class="card">
+        <div class="hint2" id="mainStatus"></div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn ghost" id="testMainBtn">Перевірити основний канал</button>
+        </div>
+      </div>
+
+      <h2 class="sec">Про тренажер</h2>
+      <div class="card">
+        <div class="hint2" style="line-height:1.75">
+          Завдання, збірка проєкту й перевірка кроків працюють <b style="color:var(--ink2)">без мережі</b>.<br>
+          ШІ додає живі відповіді наставників і ревʼю коду — там, де сторінці дозволено звертатися до моделі.<br>
+          Модель: <b style="color:var(--ink2)">claude-sonnet-5</b>.
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+"use strict";
+
+/* ============================================================
+   0. Дрібні утиліти
+   ============================================================ */
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+
+/* сховище: window.storage → localStorage → памʼять */
+const KEY = 'ide_it_trainer_v1';
+const memStore = {};
+const store = {
+  async get(k){
+    try{ if(window.storage && window.storage.get){ const r = await window.storage.get(k); return r && r.value; } }catch(e){}
+    try{ return localStorage.getItem(k); }catch(e){}
+    return memStore[k];
+  },
+  async set(k,v){
+    try{ if(window.storage && window.storage.set){ await window.storage.set(k,v); return 'збережено'; } }catch(e){}
+    try{ localStorage.setItem(k,v); return 'збережено'; }catch(e){}
+    memStore[k]=v; return 'лише на час сесії';
+  }
+};
+
+/* ============================================================
+   1. Ролі в IT — довідник, до якого привʼязані місії
+   ============================================================ */
+const ROLES = {
+  frontend:{name:'Frontend-інженер',tag:'інтерфейс',
+    d:'Робить те, що людина бачить і чіпає: розмітку, екрани, реакцію на дії. Відповідає за те, щоб кнопка була там, де її шукають, і працювала однаково на телефоні й ноутбуці.',
+    o:'володіє: HTML/CSS/JS, доступність, адаптив'},
+  backend:{name:'Backend-інженер',tag:'дані та логіка',
+    d:'Тримає те, чого не видно: збереження даних, правила, обміни з іншими системами. Якщо після перезапуску нічого не загубилось — це його робота.',
+    o:'володіє: сховище, API, цілісність даних'},
+  qa:{name:'QA-інженер',tag:'якість',
+    d:'Ламає продукт раніше за користувача. Пише кроки відтворення, слідкує, щоб виправлення однієї помилки не створило дві нові.',
+    o:'володіє: тест-кейси, баг-репорти, регресія'},
+  review:{name:'Code review',tag:'спільний код',
+    d:'Не посада, а обовʼязок команди: інший інженер читає зміни до злиття. Ловить неочевидні помилки й тримає код зрозумілим для наступного.',
+    o:'володіє: читабельність, стандарти, обмін знанням'},
+  design:{name:'Дизайнер / UX',tag:'досвід',
+    d:'Вирішує, як продукт відчувається: розміри, відступи, стани, зрозумілість. Дбає, щоб інтерфейс лишався зручним і на маленькому екрані, і однією рукою.',
+    o:'володіє: макети, стани, доступність'},
+  devops:{name:'DevOps / реліз',tag:'постачання',
+    d:'Перетворює код на продукт у руках людей: збірка, викладка, моніторинг, відкат. Його метрика — щоб реліз був нудним.',
+    o:'володіє: CI/CD, середовища, відкат'},
+  pm:{name:'Продакт-менеджер',tag:'пріоритети',
+    d:'Вирішує, що робимо зараз, а що ніколи. Перекладає бажання людей у задачі й захищає скоуп від нескінченного розростання.',
+    o:'володіє: roadmap, пріоритети, критерії готовності'},
+  legal:{name:'Юрист',tag:'право',
+    d:'Дивиться на ліцензії залежностей, договори, дані користувачів. Одна чужа бібліотека з неправильною ліцензією може вимагати відкрити весь ваш код.',
+    o:'володіє: ліцензії, договори, приватність'},
+  finance:{name:'Бухгалтер / фінанси',tag:'гроші',
+    d:'Рахує, у скільки обходиться місяць роботи й на скільки вистачить грошей. Перекладає «зробимо за два тижні» у суму.',
+    o:'володіє: бюджет, витрати, оцінка вартості'},
+  security:{name:'Безпека',tag:'ризики',
+    d:'Ставить питання «а якщо дані вкрадуть». Ключі, доступи, чужий ввід — усе, що працює проти вас, коли ви цього не бачите.',
+    o:'володіє: секрети, доступи, перевірка вводу'}
+};
+const PIPELINE = [
+  {id:'pm',t:'Ідея'},{id:'design',t:'Дизайн'},{id:'frontend',t:'Код'},
+  {id:'review',t:'Ревʼю'},{id:'qa',t:'Тести'},{id:'legal',t:'Право'},
+  {id:'finance',t:'Бюджет'},{id:'devops',t:'Реліз'}
+];
+
+/* ============================================================
+   2. Наставники — слоти навичок
+   Щоб додати фахівця: допишіть обʼєкт у масив. Логіку чіпати не треба.
+   ============================================================ */
+const STAFF = [
+  {
+    id:'legal', name:'Віктор Гнатюк', role:'Юрист', roleKey:'legal', unlocked:true,
+    persona:'Ти Віктор — юрист студії. Ліцензії відкритого коду, договори, приватність даних, відповідність вимогам. Формальний, попереджаєш про ризик заздалегідь і завжди називаєш наслідок простими словами.',
+    offline:[
+      'Найперше питання до будь-якої бібліотеки — її ліцензія. MIT, BSD, Apache 2.0 дозволяють комерційне використання; GPL вимагає відкрити код продукту, який її використовує.',
+      'Дані користувача — це відповідальність. Збирайте лише те, без чого функція не працює, і пишіть у політиці, що саме зберігаєте.',
+      'Ліцензію треба перевіряти до того, як код увійшов у продукт: прибирати залежність із релізу дорожче, ніж не додавати її.'
+    ]
+  },
+  {
+    id:'finance', name:'Галина Мельник', role:'Бухгалтер', roleKey:'finance', unlocked:true,
+    persona:'Ти Галина — бухгалтер студії. Бюджет, витрати, оцінка вартості роботи, runway. Говориш прямо й цифрами, гальмуєш від необдуманих витрат і показуєш, у скільки обходиться кожне рішення.',
+    offline:[
+      'Оцінка задачі — це не час програміста, а вартість: години × ставка + податки + інфраструктура. Тиждень роботи однієї людини рідко коштує менше, ніж здається.',
+      'Runway — на скільки місяців вистачить грошей за поточних витрат. Якщо він менший за три місяці, будь-яка нова витрата має відповідати на питання «що вона повертає».',
+      'Безкоштовний сервіс безкоштовний до певного ліміту. Перед релізом порахуйте вартість при десятикратному навантаженні.'
+    ]
+  }
+];
+const FREE_SLOTS = 4;
+
+/* ============================================================
+   3. Стартовий проєкт
+   ============================================================ */
+const BASE_FILES = {
+'index.html':
+`<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Трекер води</title>
+</head>
+<body>
+  <!-- Місія 1: сюди додай заголовок, лічильник і кнопку -->
+</body>
+</html>`,
+'app.js':
+`// Місія 2: тут зʼявиться логіка застосунку
+`,
+'styles.css':
+`/* Місія 6: тут зʼявляться стилі */
+`
+};
+const FILE_ORDER = ['index.html','app.js','styles.css'];
+
+/* ============================================================
+   4. Місії
+   check(f) отримує обʼєкт файлів і повертає true/false — усе локально.
+   ============================================================ */
+const has = (s,re) => re.test(s||'');
+const countOf = (s,re) => ((s||'').match(re)||[]).length;
+
+const MISSIONS = [
+  {
+    id:'m1', role:'frontend', title:'Каркас сторінки',
+    brief:'Продукт починається з розмітки. Додай у <body> заголовок <h1>, елемент для числа з id="count" і кнопку з id="add".',
+    why:'Frontend-інженер перекладає макет у розмітку. Ідентифікатори (id) — це домовленість між розміткою й кодом: за ними скрипт знайде елемент.',
+    steps:[
+      {t:'У index.html є заголовок <h1> з текстом', hint:'Наприклад: <h1>Трекер води</h1>',
+       check:f=>has(f['index.html'],/<h1[^>]*>\s*\S[\s\S]{2,}?<\/h1>/i)},
+      {t:'Є елемент з id="count" — місце для числа', hint:'Наприклад: <p id="count">0</p>',
+       check:f=>has(f['index.html'],/id\s*=\s*["']count["']/i)},
+      {t:'Є кнопка з id="add"', hint:'<button id="add">+1 склянка</button>',
+       check:f=>has(f['index.html'],/<button[^>]*id\s*=\s*["']add["']/i)}
+    ]
+  },
+  {
+    id:'m2', role:'frontend', title:'Перший скрипт',
+    brief:'Підключи app.js у index.html (перед </body>) і заведи в app.js змінну count = 0 та функцію render(), яка виводить значення в елемент #count.',
+    why:'Розмітка й логіка живуть окремо: так над ними можуть працювати різні люди й міняти одне, не ламаючи інше.',
+    steps:[
+      {t:'index.html підключає app.js', hint:'<script src="app.js"></script> перед закриттям </body>',
+       check:f=>has(f['index.html'],/<script[^>]+src\s*=\s*["']app\.js["']/i)},
+      {t:'В app.js оголошено count = 0', hint:'let count = 0;',
+       check:f=>has(f['app.js'],/(let|const|var)\s+count\s*=\s*0/)},
+      {t:'В app.js є функція render()', hint:'function render(){ document.getElementById("count").textContent = count; }',
+       check:f=>has(f['app.js'],/(function\s+render\s*\(|render\s*=\s*(\(|function))/)},
+      {t:'render() пише значення в #count', hint:'Використай document.getElementById("count") і textContent',
+       check:f=>has(f['app.js'],/getElementById\(\s*["']count["']\s*\)/) && has(f['app.js'],/(textContent|innerText)/)}
+    ]
+  },
+  {
+    id:'m3', role:'frontend', title:'Кнопка оживає',
+    brief:'Повісь на кнопку #add обробник кліку: він збільшує count на 1 і викликає render(). Не забудь викликати render() один раз на старті.',
+    why:'Подія — це місце, де користувач зустрічається з кодом. Один обробник = одна дія: так простіше шукати помилку.',
+    steps:[
+      {t:'Є addEventListener на кліку', hint:'document.getElementById("add").addEventListener("click", ...)',
+       check:f=>has(f['app.js'],/addEventListener\(\s*["']click["']/)},
+      {t:'Лічильник збільшується на 1', hint:'count++ або count += 1',
+       check:f=>has(f['app.js'],/count\s*\+\+|count\s*\+=\s*1\b/)},
+      {t:'render() викликається щонайменше двічі (після кліку і на старті)', hint:'Виклик render() всередині обробника і ще один у кінці файлу',
+       check:f=>countOf(f['app.js'],/render\s*\(\s*\)/g)>=2}
+    ]
+  },
+  {
+    id:'m4', role:'qa', title:'Баг-репорт від QA',
+    brief:'QA пише: «Значення нічим не скинути — після помилкового натискання доводиться перезавантажувати сторінку. Кроки: натиснути +1 тричі, спробувати повернути 0».\n\nДодай кнопку #reset, яка обнуляє лічильник і оновлює екран.',
+    why:'Баг-репорт — це не «щось не працює», а кроки відтворення й очікуваний результат. Виправлення без кроків неможливо перевірити.',
+    steps:[
+      {t:'У розмітці є кнопка з id="reset"', hint:'<button id="reset">Скинути</button>',
+       check:f=>has(f['index.html'],/<button[^>]*id\s*=\s*["']reset["']/i)},
+      {t:'Код реагує на кнопку reset', hint:'getElementById("reset").addEventListener("click", ...)',
+       check:f=>has(f['app.js'],/getElementById\(\s*["']reset["']\s*\)/)},
+      {t:'Обнулення значення присутнє', hint:'count = 0 всередині обробника',
+       check:f=>has(f['app.js'],/count\s*=\s*0/) && countOf(f['app.js'],/count\s*=\s*0/g)>=2}
+    ]
+  },
+  {
+    id:'m5', role:'review', title:'Код-ревʼю',
+    brief:'Твої зміни читатиме інша людина. Прибери var (лишились тільки let і const), додай короткий коментар, що робить файл, і переконайся, що жодна змінна не зветься a, b чи x.',
+    why:'Код читають у десятки разів частіше, ніж пишуть. Ревʼю — не про смаки: воно тримає код зрозумілим для того, хто прийде через півроку.',
+    steps:[
+      {t:'У app.js немає var', hint:'Заміни var на let або const',
+       check:f=>!has(f['app.js'],/\bvar\s+/)},
+      {t:'Є коментар-пояснення (від 8 символів)', hint:'// лічильник випитих склянок за день',
+       check:f=>has(f['app.js'],/\/\/[^\n]{8,}|\/\*[\s\S]{8,}?\*\//)},
+      {t:'Немає змінних з іменами a, b, x, tmp', hint:'Назви змінну по суті: glasses, dayTotal',
+       check:f=>!has(f['app.js'],/\b(let|const)\s+(a|b|x|tmp)\b/)}
+    ]
+  },
+  {
+    id:'m6', role:'design', title:'Розмір має значення',
+    brief:'Підключи styles.css у index.html. У стилях зроби кнопкам min-height не менше 44px і додай медіазапит @media для вузьких екранів.',
+    why:'44 пікселі — розмір, у який впевнено потрапляє палець. Дизайн — це не прикраса, а те, чи зможе людина скористатися продуктом у транспорті однією рукою.',
+    steps:[
+      {t:'index.html підключає styles.css', hint:'<link rel="stylesheet" href="styles.css"> у <head>',
+       check:f=>has(f['index.html'],/<link[^>]+styles\.css/i)},
+      {t:'Кнопкам задано min-height від 44px', hint:'button{ min-height:44px; }',
+       check:f=>{const m=(f['styles.css']||'').match(/min-height\s*:\s*(\d+)px/); return !!m && +m[1]>=44;}},
+      {t:'Є медіазапит @media', hint:'@media (max-width:480px){ ... }',
+       check:f=>has(f['styles.css'],/@media[^{]+\{/)}
+    ]
+  },
+  {
+    id:'m7', role:'backend', title:'Дані переживають перезапуск',
+    brief:'Збережи лічильник у localStorage: записуй значення після кожної зміни й читай його на старті.',
+    why:'Це спрощена версія роботи backend: стан має пережити перезапуск. Питання «де живуть дані й що буде, коли їх не знайдено» — щоденне для інженера даних.',
+    steps:[
+      {t:'Значення записується', hint:'localStorage.setItem("count", count)',
+       check:f=>has(f['app.js'],/localStorage\.setItem\(/)},
+      {t:'Значення читається на старті', hint:'const saved = localStorage.getItem("count")',
+       check:f=>has(f['app.js'],/localStorage\.getItem\(/)},
+      {t:'Врахований випадок «збереження порожнє»', hint:'Number(saved) || 0 — щоб не отримати NaN при першому запуску',
+       check:f=>has(f['app.js'],/\|\|\s*0|Number\(|parseInt\(|\?\?/)}
+    ]
+  },
+  {
+    id:'m8', role:'legal', title:'Чужа бібліотека',
+    brief:'До проєкту пропонують додати бібліотеку графіків. Порадься з юристом і бухгалтером на вкладці «Наставник», а тоді дай відповідь.',
+    why:'Технічне рішення майже завжди має правову й грошову ціну. Тут працюють ті двоє, кого не видно в редакторі.',
+    steps:[
+      {type:'quiz', t:'Бібліотека поширюється за ліцензією GPL. Ваш продукт — закритий комерційний застосунок. Що це означає?',
+       options:['Можна використовувати вільно, ліцензія стосується лише авторів',
+                'Використання зобовʼязує відкрити вихідний код продукту — потрібна заміна або інша ліцензія',
+                'Достатньо згадати автора в описі застосунку'],
+       answer:1,
+       hint:'GPL — «вірусна» ліцензія: код, що її використовує, поширюється на тих самих умовах.'},
+      {type:'quiz', t:'Бібліотека безкоштовна. Скільки вона коштує компанії?',
+       options:['Нуль — це відкритий код',
+                'Час на впровадження, оновлення й супровід, а також ризик, якщо її закинуть',
+                'Лише вартість хостингу'],
+       answer:1,
+       hint:'Безкоштовна ліцензія не означає безкоштовне володіння: підтримка залежності — це робочі години.'}
+    ]
+  },
+  {
+    id:'m9', role:'devops', title:'Реліз',
+    brief:'Перед викладкою додай у app.js функцію selfTest(), яка перевіряє, що елементи #count і #add існують, і пише результат у консоль. Потім натисни «Зібрати» — і відповідай на питання про порядок релізу.',
+    why:'Реліз має бути нудним: перевірка перед викладкою, можливість відкату, спостереження після. Героїзм у релізі — ознака поганого процесу.',
+    steps:[
+      {t:'В app.js є функція selfTest()', hint:'function selfTest(){ ... console.log("OK") }',
+       check:f=>has(f['app.js'],/function\s+selfTest\s*\(|selfTest\s*=\s*(\(|function)/)},
+      {t:'selfTest перевіряє наявність елементів', hint:'Перевір document.getElementById("add") на null',
+       check:f=>has(f['app.js'],/selfTest[\s\S]{0,400}getElementById/)},
+      {type:'quiz', t:'Що робити першим при поганому релізі — коли користувачі скаржаться просто зараз?',
+       options:['Знайти причину в коді й виправити',
+                'Повернути попередню версію (відкат), а причину шукати після',
+                'Дочекатися ранку й подивитися логи'],
+       answer:1,
+       hint:'Спочатку зупинити шкоду, потім розслідувати. Саме тому можливість відкату готують заздалегідь.'}
+    ]
+  }
+];
+
+/* ============================================================
+   5. Стан
+   ============================================================ */
+let S = null;
+function freshState(){
+  return {
+    v:1,
+    files:Object.assign({},BASE_FILES),
+    active:'index.html',
+    mission:0,
+    done:{},          // 'm3:1' -> true
+    quiz:{},          // 'm8:0' -> обраний індекс
+    con:[{c:'info',x:'Робоче місце готове. Відкрий «Завдання» і починай з першої місії.'}],
+    chats:{},
+    who:'legal',
+    settings:{key:'',mode:'reviewer'},
+    view:'con'
+  };
+}
+
+let saveT=null;
+function save(){
+  clearTimeout(saveT);
+  saveT=setTimeout(async()=>{
+    const copy = JSON.parse(JSON.stringify(S));
+    const msg = await store.set(KEY, JSON.stringify(copy));
+    const el=$('saveStatus'); if(el) el.textContent='Стан: '+msg;
+  },400);
+}
+
+/* ============================================================
+   6. Місії: обчислення прогресу
+   ============================================================ */
+const mission = () => MISSIONS[clamp(S.mission,0,MISSIONS.length-1)];
+const stepKey = (m,i) => m.id+':'+i;
+const stepDone = (m,i) => !!S.done[stepKey(m,i)];
+function missionComplete(m){ return m.steps.every((s,i)=>stepDone(m,i)); }
+function totalSteps(){ return MISSIONS.reduce((n,m)=>n+m.steps.length,0); }
+function doneSteps(){ return Object.keys(S.done).length; }
+function touchedRoles(){
+  const set=new Set();
+  MISSIONS.forEach(m=>{ if(missionComplete(m)) set.add(m.role); });
+  return set;
+}
+
+/* перевірка кроків поточної місії */
+function checkMission(){
+  const m = mission(); let fresh=0;
+  m.steps.forEach((s,i)=>{
+    if(s.type==='quiz') return;            // квіз відмічається вибором
+    const ok = !!s.check(S.files);
+    const k = stepKey(m,i);
+    if(ok && !S.done[k]){ S.done[k]=true; fresh++; }
+    if(!ok && S.done[k]) delete S.done[k];
+  });
+  if(fresh) log('ok','Перевірка: зараховано кроків — '+fresh);
+  else log('warn','Перевірка: нових зарахованих кроків немає. Розкрий підказку в кроці.');
+  if(missionComplete(m)){
+    log('ok','Місію «'+m.title+'» закрито. Роль: '+ROLES[m.role].name+'.');
+  }
+  renderAll();
+}
+
+/* ============================================================
+   7. Консоль
+   ============================================================ */
+function log(c,x){
+  S.con.push({c:c||'log',x:String(x)});
+  if(S.con.length>200) S.con=S.con.slice(-200);
+  renderCon();
+}
+function renderCon(){
+  const el=$('con'); if(!el) return;
+  el.innerHTML = S.con.map(l=>
+    '<div class="ln"><span class="t">›</span><span class="'+esc(l.c)+'">'+esc(l.x)+'</span></div>'
+  ).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+/* ============================================================
+   8. Збірка проєкту
+   ============================================================ */
+function buildDoc(){
+  let html = S.files['index.html']||'';
+  html = html.replace(/<link[^>]+href\s*=\s*["']styles\.css["'][^>]*>/ig,
+    '<style>\n'+(S.files['styles.css']||'')+'\n</style>');
+  html = html.replace(/<script[^>]+src\s*=\s*["']app\.js["'][^>]*>\s*<\/script>/ig,
+    '<scr'+'ipt>\n'+(S.files['app.js']||'')+'\n</scr'+'ipt>');
+  const bridge =
+    '<scr'+'ipt>(function(){'+
+    'var send=function(t,args){try{parent.postMessage({__ide:1,t:t,m:Array.prototype.map.call(args,function(x){'+
+    'try{return (x&&typeof x==="object")?JSON.stringify(x):String(x)}catch(e){return String(x)}}).join(" ")},"*")}catch(e){}};'+
+    '["log","warn","error","info"].forEach(function(k){var o=console[k]?console[k].bind(console):function(){};'+
+    'console[k]=function(){send(k==="info"?"info":k,arguments);o.apply(null,arguments)}});'+
+    'window.onerror=function(m,s,l){send("error",[m+" (рядок "+l+")"]);return false};'+
+    'window.addEventListener("unhandledrejection",function(e){send("error",["Promise: "+e.reason])});'+
+    '})()</scr'+'ipt>';
+  if(/<head[^>]*>/i.test(html)) html = html.replace(/<head[^>]*>/i, m=>m+bridge);
+  else html = bridge + html;
+  return html;
+}
+function runProject(){
+  log('info','Збірка…');
+  S.view='preview';
+  $('runBody').innerHTML='';
+  renderRun();
+  setPane('run');
+  const fr = $('previewFrame');
+  if(fr) fr.srcdoc = buildDoc();
+  setTimeout(()=>log('ok','Готово. Кнопка «перегляд» у шапці панелі перемикає екран застосунку і консоль.'),300);
+  save();
+}
+window.addEventListener('message', e=>{
+  const d=e.data;
+  if(d && d.__ide===1){ log(d.t==='log'?'log':d.t, d.m); }
+});
+
+/* ============================================================
+   9. Рендер: файли й редактор
+   ============================================================ */
+function renderTree(){
+  const t=$('tree');
+  t.innerHTML = '<div class="grp">водний-трекер</div>' + FILE_ORDER.map(f=>
+    '<button data-file="'+esc(f)+'" class="'+(S.active===f?'on':'')+'">'+
+    '<span class="dot"></span>'+esc(f)+'</button>').join('');
+  $('fileTabs').innerHTML = FILE_ORDER.map(f=>
+    '<button data-file="'+esc(f)+'" class="'+(S.active===f?'on':'')+'">'+esc(f)+'</button>').join('');
+}
+function renderEditor(){
+  const ed=$('editor');
+  if(ed.value !== (S.files[S.active]||'')) ed.value = S.files[S.active]||'';
+  syncGutter();
+}
+function syncGutter(){
+  const ed=$('editor'), g=$('gutter');
+  const n = (ed.value.match(/\n/g)||[]).length + 1;
+  let s=''; for(let i=1;i<=n;i++) s += i+'\n';
+  g.textContent = s;
+  g.scrollTop = ed.scrollTop;
+}
+
+/* ============================================================
+   10. Рендер: завдання
+   ============================================================ */
+function renderTask(){
+  const m = mission(), r = ROLES[m.role];
+  const done = m.steps.filter((s,i)=>stepDone(m,i)).length;
+  $('taskCounter').innerHTML = '<span class="hint2">'+(S.mission+1)+' / '+MISSIONS.length+'</span>';
+
+  let html = '<span class="mrole">'+esc(r.name)+'</span>'+
+    '<div class="mtitle">'+esc(m.title)+'</div>'+
+    '<div class="mbrief">'+esc(m.brief)+'</div>'+
+    '<div class="mwhy"><b>Навіщо це в IT:</b> '+esc(m.why)+'</div>'+
+    '<div class="steps">';
+
+  m.steps.forEach((s,i)=>{
+    const ok = stepDone(m,i);
+    html += '<div class="step '+(ok?'done':'')+'">'+
+      '<div class="sh"><span class="mark">'+(ok?'✓':'○')+'</span><span class="st">'+esc(s.t)+'</span></div>';
+    if(s.type==='quiz'){
+      const picked = S.quiz[stepKey(m,i)];
+      html += '<div class="quiz">' + s.options.map((o,oi)=>{
+        let cls=''; if(picked===oi) cls = (oi===s.answer?'pick':'bad');
+        return '<button data-quiz="'+i+'" data-opt="'+oi+'" class="'+cls+'">'+esc(o)+'</button>';
+      }).join('') + '</div>';
+      if(picked!==undefined && picked!==s.answer && s.hint)
+        html += '<div class="hint">'+esc(s.hint)+'</div>';
+    }else{
+      html += '<div class="row" style="margin-top:7px">'+
+        '<button class="btn sm ghost" data-hint="'+i+'">підказка</button></div>'+
+        '<div class="hint" id="hint-'+i+'" style="display:none">'+esc(s.hint||'')+'</div>';
+    }
+    html += '</div>';
+  });
+  html += '</div>';
+
+  html += '<div class="row" style="margin-top:12px">'+
+    '<button class="btn primary" id="checkBtn">Перевірити</button>'+
+    '<button class="btn" id="reviewBtn">Ревʼю коду</button>'+
+    '</div>';
+
+  if(missionComplete(m)){
+    html += '<div class="row" style="margin-top:10px">'+
+      (S.mission < MISSIONS.length-1
+        ? '<button class="btn primary wide" id="nextBtn">Наступна місія ▸</button>'
+        : '<div class="hint2">Стажування пройдено. Відкрий «Ролі в IT» — там видно, через чиї руки пройшов твій проєкт.</div>')+
+      '</div>';
+  }
+  html += '<div class="hint2" style="margin-top:12px">Зараховано кроків: '+done+' з '+m.steps.length+'</div>';
+
+  if(S.mission>0){
+    html += '<div class="row" style="margin-top:8px"><button class="btn sm ghost" id="prevBtn">◂ попередня місія</button></div>';
+  }
+  $('taskBody').innerHTML = html;
+}
+
+/* ============================================================
+   11. Рендер: ролі, прогрес, наставник
+   ============================================================ */
+function renderRoles(){
+  const hit = touchedRoles();
+  $('pipe').innerHTML = PIPELINE.map(p=>
+    '<span class="p '+(hit.has(p.id)?'on':'')+'">'+esc(p.t)+'</span>').join('');
+  $('rolesGrid').innerHTML = Object.keys(ROLES).map(k=>{
+    const r=ROLES[k];
+    return '<div class="role '+(hit.has(k)?'hit':'')+'">'+
+      '<div class="rn">'+esc(r.name)+'</div>'+
+      '<div class="rt">'+esc(r.tag)+(hit.has(k)?' · пройдено':'')+'</div>'+
+      '<div class="rd">'+esc(r.d)+'</div>'+
+      '<div class="ro">'+esc(r.o)+'</div></div>';
+  }).join('');
+}
+function renderProgress(){
+  const d=doneSteps(), t=totalSteps();
+  const pct = t? Math.round(d/t*100):0;
+  $('progSummary').innerHTML =
+    '<div style="font-family:var(--mono);font-size:15px">Кроків пройдено: '+d+' / '+t+' · '+pct+'%</div>'+
+    '<div class="hint2" style="margin-top:6px">Ролей торкнувся: '+touchedRoles().size+' з '+Object.keys(ROLES).length+'</div>';
+  $('progBar').style.width = pct+'%';
+  $('missionList').innerHTML = MISSIONS.map((m,i)=>{
+    const c = missionComplete(m), cur = i===S.mission;
+    const mark = c?'✓':(cur?'▸':'·');
+    const col = c?'var(--green)':(cur?'var(--amber)':'var(--dim)');
+    return '<button class="tree-row" data-goto="'+i+'" style="display:flex;gap:9px;width:100%;text-align:left;'+
+      'padding:9px 6px;border-bottom:1px solid var(--line);min-height:42px;align-items:center">'+
+      '<span style="font-family:var(--mono);color:'+col+'">'+mark+' '+String(i+1).padStart(2,'0')+'</span>'+
+      '<span style="flex:1"><b>'+esc(m.title)+'</b> <span class="hint2">· '+esc(ROLES[m.role].name)+'</span></span>'+
+      '</button>';
+  }).join('');
+  $('pillProgress').textContent = d+' / '+t;
+}
+function renderWho(){
+  const list = STAFF.map(s=>
+    '<button class="wb '+(S.who===s.id?'on':'')+'" data-who="'+esc(s.id)+'">'+
+    '<div class="n">'+esc(s.name)+'</div><div class="r">'+esc(s.role)+'</div></button>').join('') +
+    Array.from({length:FREE_SLOTS},(_,i)=>
+      '<button class="wb locked" disabled><div class="n">Вільний слот</div>'+
+      '<div class="r">навичка №'+(STAFF.length+i+1)+'</div></button>').join('');
+  $('whoList').innerHTML = list;
+  const s = STAFF.find(x=>x.id===S.who) || STAFF[0];
+  S.who = s.id;
+  $('chatHead').textContent = s.name+' · '+s.role;
+  renderChat();
+}
+function renderChat(){
+  const hist = S.chats[S.who]||[];
+  $('msgs').innerHTML = hist.length
+    ? hist.map(x=>'<div class="msg '+(x.role==='user'?'me':'them')+'">'+esc(x.content)+'</div>').join('')
+    : '<div class="msg sys">Питай про ліцензії, бюджет, вартість рішення — фахівець бачить твій поточний код і місію.</div>';
+  const m=$('msgs'); m.scrollTop=m.scrollHeight;
+}
+function renderRun(){
+  const b=$('runBody');
+  if(S.view==='preview'){
+    $('runTitle').textContent='Перегляд';
+    if(!$('previewFrame')){
+      b.innerHTML='<div class="runbox"><div class="frame">'+
+        '<iframe id="previewFrame" class="preview" sandbox="allow-scripts" title="Перегляд"></iframe></div></div>';
+      $('previewFrame').srcdoc = buildDoc();
+    }
+  }else{
+    $('runTitle').textContent='Консоль';
+    if(!$('con')){ b.innerHTML='<div class="con" id="con"></div>'; }
+    renderCon();
+  }
+}
+function renderAiPill(){
+  const p=$('pillAi');
+  const second = S.settings.key ? (S.settings.mode==='reviewer'?'ревʼюер':'резерв') : null;
+  p.textContent = 'ШІ: основний' + (second? ' + '+second : '');
+  p.className = 'pill ' + (second? 'ok':'off');
+}
+function renderAll(){
+  renderTree(); renderEditor(); renderTask(); renderRoles();
+  renderProgress(); renderWho(); renderAiPill(); save();
+}
+
+/* ============================================================
+   12. Звʼязок з моделлю
+   ============================================================ */
+const MODEL = 'claude-sonnet-5';
+let aiAbort = null;
+
+async function callClaude(system, messages, opts){
+  opts = opts||{};
+  const useKey = opts.channel==='second' && S.settings.key;
+  const headers = {'Content-Type':'application/json'};
+  if(useKey){
+    headers['x-api-key'] = S.settings.key;
+    headers['anthropic-version'] = '2023-06-01';
+    headers['anthropic-dangerous-direct-browser-access'] = 'true';
+  }
+  aiAbort = new AbortController();
+  let res;
+  try{
+    res = await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST', headers, signal:aiAbort.signal,
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: opts.maxTokens || 1400,
+        system, messages
+      })
+    });
+  } finally { aiAbort = null; }
+  if(!res.ok){
+    let detail='';
+    try{ const j=await res.json(); detail = (j.error&&j.error.message)||''; }catch(e){}
+    throw new Error('HTTP '+res.status+(detail?' · '+detail:''));
+  }
+  const data = await res.json();
+  const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n').trim();
+  if(data.stop_reason==='max_tokens')
+    return text + '\n\n[відповідь обірвано за лімітом токенів]';
+  return text;
+}
+
+/* канал: другий ключ як резерв — якщо основний не відповів */
+async function askModel(system, messages, opts){
+  opts = opts||{};
+  if(opts.forceSecond && S.settings.key) return callClaude(system,messages,Object.assign({},opts,{channel:'second'}));
+  try{
+    return await callClaude(system, messages, opts);
+  }catch(e){
+    if(e.name==='AbortError') throw e;
+    if(S.settings.key && S.settings.mode==='backup'){
+      log('warn','Основний канал недоступний — пробую резервний ключ.');
+      return callClaude(system, messages, Object.assign({},opts,{channel:'second'}));
+    }
+    throw e;
+  }
+}
+
+function contextBlock(){
+  const m = mission();
+  return 'КОНТЕКСТ СТАЖУВАННЯ (не зачитуй дослівно):\n'+
+    'Поточна місія: «'+m.title+'» — роль '+ROLES[m.role].name+'.\n'+
+    'Опис: '+m.brief+'\n'+
+    'Файли проєкту:\n'+
+    FILE_ORDER.map(f=>'--- '+f+' ---\n'+(S.files[f]||'').slice(0,1800)).join('\n');
+}
+
+async function sendChat(){
+  const inp=$('chatInput'); const text=inp.value.trim(); if(!text) return;
+  const s = STAFF.find(x=>x.id===S.who); if(!s) return;
+  inp.value='';
+  S.chats[s.id] = S.chats[s.id]||[];
+  S.chats[s.id].push({role:'user',content:text});
+  renderChat(); save();
+
+  const box=$('msgs');
+  const tp=document.createElement('div');
+  tp.className='typing'; tp.textContent=s.name.split(' ')[0]+' друкує…';
+  box.appendChild(tp); box.scrollTop=box.scrollHeight;
+  $('stopAiBtn').style.display='';
+
+  const system = s.persona+'\n\nТи консультуєш стажера IT-студії. Відповідай від першої особи, стисло (2–5 речень), '+
+    'мовою співрозмовника, без вигаданих фактів. Пояснюй наслідок рішення простими словами.\n\n'+contextBlock();
+  try{
+    const hist = S.chats[s.id].slice(-8).map(x=>({role:x.role,content:x.content}));
+    const reply = await askModel(system, hist, {maxTokens:900});
+    S.chats[s.id].push({role:'assistant',content:reply||'(тиша)'});
+  }catch(e){
+    const off = s.offline[Math.min(S.chats[s.id].length>>1, s.offline.length-1)] || s.offline[0];
+    S.chats[s.id].push({role:'assistant',
+      content:(e.name==='AbortError' ? '[зупинено]' : off+'\n\n[звʼязок із моделлю недоступний: '+e.message+']')});
+  }
+  tp.remove();
+  $('stopAiBtn').style.display='none';
+  renderChat(); save();
+}
+
+async function reviewCode(){
+  const btn=$('reviewBtn'); if(btn) btn.disabled=true;
+  const useSecond = !!S.settings.key && S.settings.mode==='reviewer';
+  log('ai','Ревʼю коду ('+(useSecond?'другий акаунт':'основний канал')+')…');
+  const m = mission();
+  const system = 'Ти досвідчений інженер на код-ревʼю. Читаєш код стажера. '+
+    'Дай 2–4 конкретні зауваження: що саме виправити й чому це важливо. '+
+    'Не переписуй файл цілком, не хвали без причини, вкажи файл і місце. Мова — українська, стисло.';
+  const user = 'Місія: '+m.title+' ('+ROLES[m.role].name+').\nЗавдання: '+m.brief+'\n\n'+
+    FILE_ORDER.map(f=>'--- '+f+' ---\n'+(S.files[f]||'')).join('\n')+'\n\nТвоє ревʼю:';
+  try{
+    const out = await askModel(system,[{role:'user',content:user}],{maxTokens:1200,forceSecond:useSecond});
+    String(out).split('\n').filter(Boolean).forEach(l=>log('ai',l));
+  }catch(e){
+    log('warn','Ревʼю недоступне: '+e.message+'. Локальна перевірка кроків працює як завжди.');
+  }
+  if(btn) btn.disabled=false;
+  S.view='con'; renderRun();
+}
+
+/* ============================================================
+   13. Події
+   ============================================================ */
+function setTab(name){
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on', b.dataset.tab===name));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on', t.id==='tab-'+name));
+}
+function setPane(name){
+  document.body.dataset.pane = name;
+  document.querySelectorAll('#switch button').forEach(b=>b.classList.toggle('on', b.dataset.pane===name));
+  if(name==='code') setTimeout(syncGutter,0);
+}
+
+function boot(){
+  $('nav').addEventListener('click', e=>{
+    const b=e.target.closest('button[data-tab]'); if(!b) return;
+    setTab(b.dataset.tab);
+    if(b.dataset.tab==='ide') setTimeout(syncGutter,0);
+  });
+  $('switch').addEventListener('click', e=>{
+    const b=e.target.closest('button[data-pane]'); if(!b) return; setPane(b.dataset.pane);
+  });
+
+  document.body.addEventListener('click', e=>{
+    const f=e.target.closest('[data-file]');
+    if(f){ S.active=f.dataset.file; renderTree(); renderEditor(); setPane('code'); save(); return; }
+
+    const h=e.target.closest('[data-hint]');
+    if(h){ const el=$('hint-'+h.dataset.hint); if(el) el.style.display = el.style.display==='none'?'':'none'; return; }
+
+    const q=e.target.closest('[data-quiz]');
+    if(q){
+      const m=mission(), i=+q.dataset.quiz, opt=+q.dataset.opt, s=m.steps[i];
+      S.quiz[stepKey(m,i)] = opt;
+      if(opt===s.answer){ S.done[stepKey(m,i)]=true; log('ok','Відповідь правильна.'); }
+      else { delete S.done[stepKey(m,i)]; log('warn','Не те. Подивись пояснення під варіантами.'); }
+      renderAll(); return;
+    }
+
+    const g=e.target.closest('[data-goto]');
+    if(g){ S.mission=+g.dataset.goto; setTab('ide'); setPane('task'); renderAll(); return; }
+
+    const w=e.target.closest('[data-who]');
+    if(w){ S.who=w.dataset.who; renderWho(); save(); return; }
+
+    if(e.target.closest('#checkBtn')){ checkMission(); return; }
+    if(e.target.closest('#reviewBtn')){ reviewCode(); return; }
+    if(e.target.closest('#nextBtn')){
+      S.mission=clamp(S.mission+1,0,MISSIONS.length-1); log('info','Місія '+(S.mission+1)+': '+mission().title); renderAll(); return; }
+    if(e.target.closest('#prevBtn')){ S.mission=clamp(S.mission-1,0,MISSIONS.length-1); renderAll(); return; }
+  });
+
+  /* редактор */
+  const ed=$('editor');
+  ed.addEventListener('input', ()=>{ S.files[S.active]=ed.value; syncGutter(); save(); });
+  ed.addEventListener('scroll', ()=>{ $('gutter').scrollTop = ed.scrollTop; });
+  ed.addEventListener('keydown', e=>{
+    if(e.key==='Tab'){
+      e.preventDefault();
+      const s=ed.selectionStart, en=ed.selectionEnd;
+      ed.value = ed.value.slice(0,s) + '  ' + ed.value.slice(en);
+      ed.selectionStart = ed.selectionEnd = s+2;
+      S.files[S.active]=ed.value; syncGutter(); save();
+    }
+  });
+
+  $('runBtn').addEventListener('click', runProject);
+  $('viewToggle').addEventListener('click', ()=>{
+    S.view = S.view==='con' ? 'preview' : 'con';
+    $('runBody').innerHTML='';
+    renderRun(); setPane('run'); save();
+  });
+  $('clearConBtn').addEventListener('click', ()=>{ S.con=[]; renderCon(); save(); });
+  $('resetFileBtn').addEventListener('click', ()=>{
+    if(!BASE_FILES[S.active]) return;
+    S.files[S.active]=BASE_FILES[S.active];
+    log('warn','Файл '+S.active+' повернуто до початкового стану.');
+    renderAll();
+  });
+
+  $('sendBtn').addEventListener('click', sendChat);
+  $('chatInput').addEventListener('keydown', e=>{ if(e.key==='Enter') sendChat(); });
+  $('stopAiBtn').addEventListener('click', ()=>{ if(aiAbort) aiAbort.abort(); });
+
+  /* налаштування */
+  $('keyInput').value = S.settings.key||'';
+  $('roleSelect').value = S.settings.mode||'reviewer';
+  $('saveKeyBtn').addEventListener('click', ()=>{
+    S.settings.key = $('keyInput').value.trim();
+    S.settings.mode = $('roleSelect').value;
+    $('keyStatus').textContent = S.settings.key ? 'Ключ збережено локально.' : 'Ключ порожній — працює лише основний канал.';
+    renderAiPill(); save();
+  });
+  $('clearKeyBtn').addEventListener('click', ()=>{
+    S.settings.key=''; $('keyInput').value='';
+    $('keyStatus').textContent='Ключ прибрано.'; renderAiPill(); save();
+  });
+  $('testKeyBtn').addEventListener('click', async()=>{
+    const st=$('keyStatus');
+    if(!$('keyInput').value.trim()){ st.textContent='Спершу введи ключ.'; return; }
+    S.settings.key = $('keyInput').value.trim();
+    st.textContent='Перевіряю…';
+    try{
+      const r = await callClaude('Відповідай одним словом.',[{role:'user',content:'Скажи: працює'}],{channel:'second',maxTokens:32});
+      st.textContent='Другий акаунт відповів: '+r.slice(0,60);
+      renderAiPill(); save();
+    }catch(e){ st.textContent='Не вийшло: '+e.message; }
+  });
+  $('testMainBtn').addEventListener('click', async()=>{
+    const st=$('mainStatus'); st.textContent='Перевіряю…';
+    try{
+      const r = await callClaude('Відповідай одним словом.',[{role:'user',content:'Скажи: працює'}],{maxTokens:32});
+      st.textContent='Основний канал відповів: '+r.slice(0,60);
+    }catch(e){
+      st.textContent='Основний канал недоступний ('+e.message+'). Тренажер працює далі: завдання й перевірка не потребують мережі.';
+    }
+  });
+
+  $('resetAllBtn').addEventListener('click', ()=>{
+    const keep = S.settings;
+    S = freshState(); S.settings = keep;
+    log('info','Стажування почато спочатку.');
+    setTab('ide'); setPane('task'); renderAll();
+  });
+
+  window.addEventListener('resize', ()=>setTimeout(syncGutter,0));
+
+  $('mainStatus').textContent =
+    'Основний канал працює там, де сторінці дозволено звертатися до моделі. Кнопка нижче перевіряє це прямо зараз.';
+  renderRun();
+  renderAll();
+  setPane(window.innerWidth>=720 ? 'code' : 'task');
+}
+
+/* ============================================================
+   14. Старт
+   ============================================================ */
+(async function(){
+  try{
+    const raw = await store.get(KEY);
+    if(raw){
+      const p = JSON.parse(raw);
+      if(p && p.files) S = p;
+    }
+  }catch(e){}
+  if(!S) S = freshState();
+  /* добудова полів, яких могло не бути у збереженому стані */
+  const d = freshState();
+  Object.keys(d).forEach(k=>{ if(S[k]===undefined) S[k]=d[k]; });
+  FILE_ORDER.forEach(f=>{ if(typeof S.files[f]!=='string') S.files[f]=BASE_FILES[f]; });
+  if(!STAFF.some(s=>s.id===S.who)) S.who = STAFF[0].id;
+  S.mission = clamp(S.mission,0,MISSIONS.length-1);
+  boot();
+})();
+</script>
+</body>
+</html>
