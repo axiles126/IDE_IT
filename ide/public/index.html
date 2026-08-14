@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>IDE_IT — середовище розробки</title>
+<style>
+:root{
+  --bg:#0a0e12;--panel:#10171f;--panel2:#0c1219;--raise:#15202b;--line:#1d2a36;--line2:#26384a;
+  --ink:#cbd6de;--ink2:#9fb0bc;--dim:#64757f;
+  --amber:#f0a830;--green:#5fd38a;--red:#e5544b;--cyan:#4cc6d6;--violet:#9a8be0;
+  --mono:ui-monospace,'SFMono-Regular',Menlo,Consolas,'Liberation Mono',monospace;
+  --body:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.45;
+  -webkit-font-smoothing:antialiased;display:flex;flex-direction:column;min-height:100dvh;overflow:hidden;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+button,input,textarea,select{font-family:inherit;color:inherit}
+button{cursor:pointer;background:none;border:none}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:var(--line2);border-radius:4px}
+::-webkit-scrollbar-track{background:transparent}
+
+header{flex:0 0 auto;display:flex;align-items:center;gap:9px;padding:7px 11px;
+  background:linear-gradient(180deg,#0c131b,#0a0e12);border-bottom:1px solid var(--line)}
+.logo{display:flex;align-items:center;gap:7px;min-width:0}
+.logo svg{width:24px;height:24px;flex:0 0 auto;color:var(--amber)}
+.logo .nm{font-family:var(--mono);font-weight:700;letter-spacing:2px;font-size:14px;white-space:nowrap}
+.wsPath{font-family:var(--mono);font-size:10.5px;color:var(--dim);white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;max-width:34vw;direction:rtl}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:6px;flex-shrink:0}
+.tool{font-family:var(--mono);font-size:10px;letter-spacing:.5px;border:1px solid var(--line2);
+  border-radius:999px;padding:3px 9px;background:var(--panel2);color:var(--dim);white-space:nowrap}
+.tool.on{color:var(--green);border-color:#2a5e3e}
+.tool.off{color:var(--red);border-color:#5e2a2a}
+
+.bar{flex:0 0 auto;display:flex;gap:5px;align-items:center;padding:6px 8px;
+  background:var(--panel2);border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
+.bar::-webkit-scrollbar{display:none}
+
+main{flex:1 1 auto;min-height:0;display:grid;gap:6px;padding:6px;
+  grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto;grid-template-areas:"pane" "switch"}
+.pane{grid-area:pane;display:none;flex-direction:column;min-height:0;min-width:0;
+  background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+body[data-pane="files"] .pane.files,
+body[data-pane="code"]  .pane.code,
+body[data-pane="term"]  .pane.term,
+body[data-pane="prev"]  .pane.prev{display:flex}
+.paneh{flex:0 0 auto;display:flex;align-items:center;gap:7px;padding:6px 9px;
+  border-bottom:1px solid var(--line);background:var(--panel2);min-height:36px}
+.paneh .t{font-family:var(--mono);font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--dim)}
+.paneh .r{margin-left:auto;display:flex;gap:5px;align-items:center}
+.paneb{flex:1 1 auto;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch}
+
+.switch{grid-area:switch;display:flex;gap:4px;background:var(--panel2);
+  border:1px solid var(--line);border-radius:6px;padding:4px}
+.switch button{flex:1;font-family:var(--mono);font-size:10.5px;letter-spacing:.5px;text-transform:uppercase;
+  color:var(--dim);padding:9px 4px;border-radius:4px;min-height:40px}
+.switch button.on{background:var(--raise);color:var(--cyan)}
+
+/* дерево */
+.tree{padding:5px;font-family:var(--mono);font-size:12.5px}
+.tree .row{display:flex;align-items:center;gap:6px;width:100%;text-align:left;padding:6px 8px;
+  border-radius:4px;color:var(--ink2);min-height:34px}
+.tree .row:hover{background:var(--raise)}
+.tree .row.on{background:var(--raise);color:var(--cyan)}
+.tree .row .ic{width:14px;text-align:center;flex:0 0 auto;color:var(--dim)}
+.tree .row.on .ic{color:var(--cyan)}
+.tree .row.dirrow .ic{color:var(--amber)}
+.tree .row .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tree .row .sz{margin-left:auto;font-size:9.5px;color:var(--dim);flex:0 0 auto}
+.tree .kids{margin-left:11px;border-left:1px solid var(--line)}
+
+/* редактор */
+.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;min-width:0}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{font-family:var(--mono);font-size:11px;padding:5px 9px;border-radius:4px;color:var(--dim);
+  white-space:nowrap;min-height:30px;display:flex;align-items:center;gap:6px}
+.tabs button.on{background:var(--raise);color:var(--ink)}
+.tabs button .x{color:var(--dim);font-size:13px}
+.tabs button .dirty{color:var(--amber)}
+.edwrap{display:flex;height:100%;min-height:0;background:#080c10}
+.gutter{flex:0 0 auto;padding:10px 6px 10px 10px;text-align:right;font-family:var(--mono);font-size:12.5px;
+  line-height:1.6;color:#3a4a57;background:#080c10;user-select:none;overflow:hidden;white-space:pre}
+.editor{flex:1 1 auto;min-width:0;padding:10px 10px 10px 4px;background:#080c10;border:none;outline:none;
+  resize:none;font-family:var(--mono);font-size:12.5px;line-height:1.6;color:#d6e6dd;white-space:pre;
+  overflow:auto;tab-size:2}
+.empty{padding:22px;color:var(--dim);font-family:var(--mono);font-size:12px;line-height:1.8}
+
+/* термінал */
+.term{padding:9px;font-family:var(--mono);font-size:11.5px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.term .out{color:var(--ink2)}
+.term .err{color:var(--red)}
+.term .sys{color:var(--cyan)}
+.term .cmd{color:var(--green)}
+.term .exit0{color:var(--green)}
+.term .exitN{color:var(--amber)}
+.cmdline{display:flex;gap:6px;padding:7px;border-top:1px solid var(--line);background:var(--panel2)}
+.cmdline .ps{font-family:var(--mono);color:var(--green);align-self:center;flex:0 0 auto}
+.cmdline input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line2);border-radius:4px;
+  padding:8px 10px;font-family:var(--mono);font-size:12px;min-height:38px}
+.cmdline input:focus{outline:none;border-color:var(--green)}
+
+.previewFrame{width:100%;height:100%;border:none;background:#fff;display:block}
+
+.btn{font-family:var(--mono);font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;
+  padding:7px 11px;border-radius:4px;border:1px solid var(--line2);background:var(--raise);color:var(--ink);
+  transition:.15s;min-height:34px;white-space:nowrap}
+.btn:hover{border-color:var(--green);color:var(--green)}
+.btn.primary{background:linear-gradient(180deg,#2f8f56,#1c6b3a);border-color:#3aa968;color:#06140b;font-weight:700}
+.btn.primary:hover{filter:brightness(1.1);color:#06140b}
+.btn.ghost{background:transparent}
+.btn.danger:hover{border-color:var(--red);color:var(--red)}
+.btn:disabled{opacity:.4;cursor:not-allowed;border-color:var(--line);color:var(--dim)}
+.sp{flex:1 1 auto}
+.status{font-family:var(--mono);font-size:10px;color:var(--dim);white-space:nowrap}
+
+@media(min-width:760px){
+  main{grid-template-columns:minmax(170px,210px) minmax(0,1fr);
+       grid-template-rows:minmax(0,1.5fr) minmax(0,1fr);
+       grid-template-areas:"files code" "files term"}
+  .pane.files{grid-area:files;display:flex}
+  .pane.code{grid-area:code;display:flex}
+  .pane.term{grid-area:term;display:flex}
+  .pane.prev{grid-area:code;display:none}
+  body[data-prev="1"] .pane.prev{display:flex}
+  body[data-prev="1"] .pane.code{display:none}
+  .switch{display:none}
+}
+@media(min-width:1200px){
+  main{grid-template-columns:210px minmax(0,1.3fr) minmax(320px,1fr);
+       grid-template-rows:minmax(0,1.5fr) minmax(0,1fr);
+       grid-template-areas:"files code prev" "files term prev"}
+  .pane.prev{grid-area:prev;display:flex}
+  body[data-prev="1"] .pane.code{display:flex}
+}
+@media(orientation:landscape) and (max-height:620px){
+  header{padding:3px 9px}
+  .logo svg{width:19px;height:19px}
+  .logo .nm{font-size:12px}
+  .wsPath{display:none}
+  .bar{padding:4px 6px}
+  .btn{min-height:30px;padding:5px 9px;font-size:10px}
+  main{gap:5px;padding:5px}
+}
+@media(orientation:landscape) and (max-height:620px) and (min-width:660px){
+  main{grid-template-columns:minmax(130px,165px) minmax(0,1.4fr) minmax(220px,1fr);
+       grid-template-rows:minmax(0,1.6fr) minmax(0,1fr);
+       grid-template-areas:"files code prev" "files term prev"}
+  .pane.files,.pane.code,.pane.term,.pane.prev{display:flex}
+  .switch{display:none}
+}
+</style>
+</head>
+<body data-pane="code">
+
+<header>
+  <div class="logo">
+    <svg viewBox="0 0 64 64" aria-hidden="true" fill="none" stroke="currentColor"
+         stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M31.5 7.5c5.2 2.6 7.6 7.6 5.9 12.4-1 2.9-2.9 5.4-5.4 8.1"/>
+      <path d="M32 28c-3.4-2.6-4.6-6.6-2.6-9.8 1.6-2.6 1.9-5.4.1-8.4"/>
+      <path d="M20.5 40c-1.4-5.4 3.4-11 11.5-11s12.9 5.6 11.5 11"/>
+      <path d="M14.5 49.5c0-5.6 7.6-9.5 17.5-9.5s17.5 3.9 17.5 9.5S41.9 59 32 59s-17.5-3.9-17.5-9.5Z"/>
+      <ellipse cx="26" cy="47" rx="2.1" ry="2.8" fill="currentColor" stroke="none"/>
+      <ellipse cx="38" cy="47" rx="2.1" ry="2.8" fill="currentColor" stroke="none"/>
+      <path d="M27 54c1.4-1.7 3.1-2.5 5-2.5s3.6.8 5 2.5"/>
+    </svg>
+    <span class="nm">IDE_IT</span>
+  </div>
+  <span class="wsPath" id="wsPath">…</span>
+  <div class="hdr-right" id="tools"></div>
+</header>
+
+<div class="bar">
+  <button class="btn primary" id="runBtn" title="Ctrl+Enter">▸ Запустити</button>
+  <button class="btn danger" id="stopBtn" disabled>■ Стоп</button>
+  <button class="btn" id="saveBtn" title="Ctrl+S">Зберегти</button>
+  <button class="btn ghost" id="previewBtn">Переглянути</button>
+  <span class="sp"></span>
+  <button class="btn ghost" id="newFileBtn">+ файл</button>
+  <button class="btn ghost" id="newDirBtn">+ тека</button>
+  <button class="btn ghost" id="delBtn">видалити</button>
+  <button class="btn ghost" id="reloadBtn">оновити</button>
+  <span class="status" id="status"></span>
+</div>
+
+<main>
+  <section class="pane files">
+    <div class="paneh"><span class="t">Провідник</span></div>
+    <div class="paneb"><div class="tree" id="tree"></div></div>
+  </section>
+
+  <section class="pane code">
+    <div class="paneh">
+      <div class="tabs" id="tabs"></div>
+      <span class="r"><span class="status" id="pos"></span></span>
+    </div>
+    <div class="paneb" style="overflow:hidden">
+      <div class="edwrap" id="edwrap">
+        <div class="gutter" id="gutter">1</div>
+        <textarea class="editor" id="editor" spellcheck="false" autocapitalize="off"
+                  autocorrect="off" autocomplete="off" wrap="off"
+                  placeholder="Обери файл ліворуч або створи новий"></textarea>
+      </div>
+    </div>
+  </section>
+
+  <section class="pane term">
+    <div class="paneh"><span class="t" id="termTitle">Термінал</span>
+      <span class="r"><button class="btn ghost" id="clearTermBtn">очистити</button></span>
+    </div>
+    <div class="paneb"><div class="term" id="term"></div></div>
+    <div class="cmdline">
+      <span class="ps" id="ps">$</span>
+      <input id="cmdInput" placeholder="команда: npm init -y · pip install requests · go mod init app · git status"
+             autocomplete="off" spellcheck="false">
+    </div>
+  </section>
+
+  <section class="pane prev">
+    <div class="paneh"><span class="t">Перегляд</span>
+      <span class="r">
+        <span class="status" id="prevPath"></span>
+        <button class="btn ghost" id="prevReload">оновити</button>
+        <button class="btn ghost" id="prevClose">закрити</button>
+      </span>
+    </div>
+    <div class="paneb" style="overflow:hidden">
+      <iframe class="previewFrame" id="previewFrame" title="Перегляд"></iframe>
+    </div>
+  </section>
+
+  <div class="switch" id="switch">
+    <button data-pane="files">Файли</button>
+    <button data-pane="code" class="on">Код</button>
+    <button data-pane="term">Термінал</button>
+    <button data-pane="prev">Перегляд</button>
+  </div>
+</main>
+
+<script>
+"use strict";
+const TOKEN = '__IDE_TOKEN__';
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ---------- стан ---------- */
+const st = {
+  root:'', tools:{}, tree:[], open:[], active:null,
+  buffers:{}, saved:{}, running:null, prevPath:null, history:[], hIdx:-1
+};
+
+/* ---------- API ---------- */
+async function api(pathname, opts){
+  opts = opts || {};
+  const res = await fetch('/api/'+pathname, {
+    method: opts.method || 'GET',
+    headers: Object.assign({'x-ide-token':TOKEN}, opts.body?{'Content-Type':'application/json'}:{}),
+    body: opts.body ? JSON.stringify(opts.body) : undefined
+  });
+  let data = {};
+  try{ data = await res.json(); }catch(e){}
+  if(!res.ok) throw new Error(data.error || ('HTTP '+res.status));
+  return data;
+}
+function status(msg, kind){
+  const el=$('status');
+  el.textContent = msg||'';
+  el.style.color = kind==='err' ? 'var(--red)' : (kind==='ok' ? 'var(--green)' : 'var(--dim)');
+  if(msg) setTimeout(()=>{ if(el.textContent===msg) el.textContent=''; }, 4000);
+}
+
+/* ---------- термінал ---------- */
+function term(cls, text){
+  const t=$('term');
+  const span=document.createElement('span');
+  span.className=cls;
+  span.textContent=text;
+  t.appendChild(span);
+  const box=t.parentElement;
+  box.scrollTop = box.scrollHeight;
+  while(t.childNodes.length>800) t.removeChild(t.firstChild);
+}
+function termLine(cls, text){ term(cls, text+'\n'); }
+
+/* ---------- потік подій ---------- */
+function connectEvents(){
+  const es = new EventSource('/api/events?t='+encodeURIComponent(TOKEN));
+  es.onmessage = e => {
+    let m; try{ m=JSON.parse(e.data); }catch(_){ return; }
+    if(m.t==='start'){
+      st.running = m.id;
+      $('stopBtn').disabled=false; $('runBtn').disabled=true;
+      termLine('cmd', '$ '+m.label);
+      $('termTitle').textContent='Термінал · виконується';
+    }
+    else if(m.t==='out') term('out', m.data);
+    else if(m.t==='err') term('err', m.data);
+    else if(m.t==='exit'){
+      st.running=null;
+      $('stopBtn').disabled=true; $('runBtn').disabled=false;
+      $('termTitle').textContent='Термінал';
+      termLine(m.code===0?'exit0':'exitN', '[завершено з кодом '+m.code+']');
+      if(st.prevPath) $('previewFrame').contentWindow.location.reload();
+      refreshTree();
+    }
+  };
+  es.onerror = ()=>{ /* браузер перепідключиться сам */ };
+}
+
+/* ---------- дерево файлів ---------- */
+function iconFor(name, dir){
+  if(dir) return '▸';
+  const e=(name.split('.').pop()||'').toLowerCase();
+  if(e==='js'||e==='mjs'||e==='cjs') return 'JS';
+  if(e==='ts') return 'TS';
+  if(e==='py') return 'PY';
+  if(e==='go') return 'GO';
+  if(e==='html'||e==='htm') return '<>';
+  if(e==='css') return '#';
+  if(e==='json') return '{}';
+  if(e==='md') return 'M';
+  return '·';
+}
+function renderTree(){
+  const build = (nodes) => '<div class="kids">' + nodes.map(n => {
+    if(n.dir){
+      return '<div class="row dirrow" data-dir="'+esc(n.path)+'">'+
+        '<span class="ic">'+ (n.skipped?'⊘':'▸') +'</span><span class="nm">'+esc(n.name)+'</span></div>'+
+        (n.children && n.children.length ? build(n.children) : '');
+    }
+    const on = st.active===n.path ? ' on' : '';
+    const kb = n.size>=1024 ? Math.round(n.size/1024)+'K' : (n.size||0)+'B';
+    return '<div class="row'+on+'" data-file="'+esc(n.path)+'">'+
+      '<span class="ic">'+iconFor(n.name,false)+'</span>'+
+      '<span class="nm">'+esc(n.name)+'</span><span class="sz">'+kb+'</span></div>';
+  }).join('') + '</div>';
+  const html = build(st.tree).replace(/^<div class="kids">/,'<div>');
+  $('tree').innerHTML = html || '<div class="empty">Тека порожня</div>';
+}
+async function refreshTree(){
+  try{ const r = await api('tree'); st.tree = r.tree; renderTree(); }catch(e){}
+}
+
+/* ---------- вкладки й редактор ---------- */
+function renderTabs(){
+  $('tabs').innerHTML = st.open.map(p=>{
+    const dirty = st.buffers[p] !== st.saved[p];
+    return '<button data-tab="'+esc(p)+'" class="'+(st.active===p?'on':'')+'">'+
+      (dirty?'<span class="dirty">●</span>':'')+
+      '<span>'+esc(p.split('/').pop())+'</span>'+
+      '<span class="x" data-close="'+esc(p)+'">×</span></button>';
+  }).join('');
+}
+function syncGutter(){
+  const ed=$('editor'), g=$('gutter');
+  const n=(ed.value.match(/\n/g)||[]).length+1;
+  let s=''; for(let i=1;i<=n;i++) s+=i+'\n';
+  g.textContent=s; g.scrollTop=ed.scrollTop;
+  const before = ed.value.slice(0, ed.selectionStart);
+  const line = (before.match(/\n/g)||[]).length + 1;
+  const col = before.length - (before.lastIndexOf('\n')+1) + 1;
+  $('pos').textContent = st.active ? (line+':'+col) : '';
+}
+async function openFile(p){
+  if(st.buffers[p]===undefined){
+    try{
+      const r = await api('file?p='+encodeURIComponent(p));
+      st.buffers[p]=r.content; st.saved[p]=r.content;
+    }catch(e){ status(e.message,'err'); return; }
+  }
+  if(!st.open.includes(p)) st.open.push(p);
+  st.active=p;
+  $('editor').value = st.buffers[p];
+  renderTabs(); renderTree(); syncGutter();
+  if(window.innerWidth<760) setPane('code');
+}
+function closeFile(p){
+  if(st.buffers[p]!==st.saved[p] && !confirm('Файл «'+p+'» не збережено. Закрити?')) return;
+  st.open = st.open.filter(x=>x!==p);
+  delete st.buffers[p]; delete st.saved[p];
+  if(st.active===p){
+    st.active = st.open[st.open.length-1] || null;
+    $('editor').value = st.active ? st.buffers[st.active] : '';
+  }
+  renderTabs(); renderTree(); syncGutter();
+}
+async function saveActive(){
+  if(!st.active) return false;
+  try{
+    await api('file',{method:'POST',body:{path:st.active,content:st.buffers[st.active]}});
+    st.saved[st.active]=st.buffers[st.active];
+    renderTabs(); status('збережено: '+st.active,'ok');
+    return true;
+  }catch(e){ status(e.message,'err'); return false; }
+}
+
+/* ---------- запуск ---------- */
+async function runActive(){
+  if(!st.active){ status('немає відкритого файла','err'); return; }
+  if(!await saveActive()) return;
+  try{
+    const r = await api('run',{method:'POST',body:{path:st.active}});
+    if(r.preview){ showPreview(r.preview); }
+  }catch(e){ termLine('err','⚠ '+e.message); setPane('term'); }
+}
+async function stopRun(){
+  try{ await api('stop',{method:'POST',body:{id:st.running}}); }catch(e){}
+}
+
+/* ---------- перегляд ---------- */
+function showPreview(p){
+  st.prevPath=p;
+  document.body.dataset.prev='1';
+  $('prevPath').textContent=p;
+  $('previewFrame').src='/preview/'+p.split('/').map(encodeURIComponent).join('/')+'?ts='+Date.now();
+  if(window.innerWidth<760) setPane('prev');
+}
+
+/* ---------- панелі ---------- */
+function setPane(name){
+  document.body.dataset.pane=name;
+  document.querySelectorAll('#switch button').forEach(b=>b.classList.toggle('on', b.dataset.pane===name));
+  if(name==='code') setTimeout(syncGutter,0);
+}
+
+/* ---------- інструменти в шапці ---------- */
+function renderTools(){
+  const t=st.tools||{};
+  const item=(label,val,url)=>{
+    const ok=!!val;
+    return '<span class="tool '+(ok?'on':'off')+'" title="'+esc(val|| (url?('не встановлено — '+url):'не знайдено'))+'">'+
+      esc(label)+(ok?' ✓':' ✗')+'</span>';
+  };
+  $('tools').innerHTML =
+    item('node',t.node)+item('python',t.python)+item('go',t.go,'https://go.dev/dl/')+
+    '<button class="btn ghost" id="toolsRefresh" style="min-height:26px;padding:3px 8px">↻</button>';
+  const b=$('toolsRefresh');
+  if(b) b.onclick=async()=>{ const r=await api('tools',{method:'POST'}); st.tools=r.tools; renderTools();
+    termLine('sys','інструменти перевірено: node '+(r.tools.node||'—')+' · python '+(r.tools.python||'—')+' · go '+(r.tools.go||'—')); };
+}
+
+/* ---------- події ---------- */
+function bind(){
+  $('tree').addEventListener('click', e=>{
+    const f=e.target.closest('[data-file]'); if(f){ openFile(f.dataset.file); return; }
+  });
+  $('tabs').addEventListener('click', e=>{
+    const x=e.target.closest('[data-close]');
+    if(x){ e.stopPropagation(); closeFile(x.dataset.close); return; }
+    const t=e.target.closest('[data-tab]'); if(t) openFile(t.dataset.tab);
+  });
+  $('switch').addEventListener('click', e=>{
+    const b=e.target.closest('[data-pane]'); if(b) setPane(b.dataset.pane);
+  });
+
+  const ed=$('editor');
+  ed.addEventListener('input', ()=>{ if(st.active){ st.buffers[st.active]=ed.value; renderTabs(); } syncGutter(); });
+  ed.addEventListener('scroll', ()=>{ $('gutter').scrollTop=ed.scrollTop; });
+  ed.addEventListener('click', syncGutter);
+  ed.addEventListener('keyup', syncGutter);
+  ed.addEventListener('keydown', e=>{
+    const pairs={'(':')','[':']','{':'}','"':'"',"'":"'",'`':'`'};
+    if(e.key==='Tab'){
+      e.preventDefault(); insert('  ');
+    } else if(e.key==='Enter'){
+      const s=ed.selectionStart, before=ed.value.slice(0,s);
+      const line=before.slice(before.lastIndexOf('\n')+1);
+      const indent=(line.match(/^[ \t]*/)||[''])[0];
+      const extra=/[\{\[\(:]$/.test(line.trim())?'  ':'';
+      e.preventDefault(); insert('\n'+indent+extra);
+    } else if(pairs[e.key] && ed.selectionStart===ed.selectionEnd){
+      e.preventDefault();
+      const s=ed.selectionStart;
+      insert(e.key+pairs[e.key]);
+      ed.selectionStart=ed.selectionEnd=s+1;
+      syncGutter();
+    } else if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='s'){
+      e.preventDefault(); saveActive();
+    } else if((e.ctrlKey||e.metaKey) && e.key==='Enter'){
+      e.preventDefault(); runActive();
+    }
+  });
+  function insert(text){
+    const s=ed.selectionStart, en=ed.selectionEnd;
+    ed.value = ed.value.slice(0,s)+text+ed.value.slice(en);
+    ed.selectionStart=ed.selectionEnd=s+text.length;
+    if(st.active) st.buffers[st.active]=ed.value;
+    renderTabs(); syncGutter();
+  }
+
+  $('runBtn').onclick=runActive;
+  $('stopBtn').onclick=stopRun;
+  $('saveBtn').onclick=saveActive;
+  $('previewBtn').onclick=()=>{
+    const p = st.active && /\.html?$/i.test(st.active) ? st.active
+            : (findFirst(st.tree, n=>!n.dir && /\.html?$/i.test(n.name))||{}).path;
+    if(p) showPreview(p); else status('немає HTML-файла','err');
+  };
+  $('prevReload').onclick=()=>{ if(st.prevPath) showPreview(st.prevPath); };
+  $('prevClose').onclick=()=>{ document.body.dataset.prev=''; st.prevPath=null; $('previewFrame').src='about:blank'; };
+  $('clearTermBtn').onclick=()=>{ $('term').textContent=''; };
+  $('reloadBtn').onclick=async()=>{ await refreshTree(); status('оновлено','ok'); };
+
+  $('newFileBtn').onclick=async()=>{
+    const name=prompt('Ім’я нового файла (можна з текою: src/main.py)');
+    if(!name) return;
+    try{ const r=await api('create',{method:'POST',body:{path:name}}); st.tree=r.tree; renderTree(); openFile(name); }
+    catch(e){ status(e.message,'err'); }
+  };
+  $('newDirBtn').onclick=async()=>{
+    const name=prompt('Ім’я нової теки');
+    if(!name) return;
+    try{ const r=await api('create',{method:'POST',body:{path:name,dir:true}}); st.tree=r.tree; renderTree(); }
+    catch(e){ status(e.message,'err'); }
+  };
+  $('delBtn').onclick=async()=>{
+    if(!st.active){ status('немає вибраного файла','err'); return; }
+    if(!confirm('Видалити «'+st.active+'» назавжди?')) return;
+    const p=st.active;
+    try{
+      const r=await api('delete',{method:'POST',body:{path:p}});
+      st.open=st.open.filter(x=>x!==p); delete st.buffers[p]; delete st.saved[p];
+      st.active=st.open[st.open.length-1]||null;
+      $('editor').value = st.active? st.buffers[st.active] : '';
+      st.tree=r.tree; renderTabs(); renderTree(); syncGutter();
+      status('видалено: '+p,'ok');
+    }catch(e){ status(e.message,'err'); }
+  };
+
+  const ci=$('cmdInput');
+  ci.addEventListener('keydown', async e=>{
+    if(e.key==='Enter'){
+      const v=ci.value.trim(); if(!v) return;
+      ci.value='';
+      if(st.running){ // передати у stdin запущеного процесу
+        try{ await api('stdin',{method:'POST',body:{id:st.running,data:v}}); term('sys', v+'\n'); }
+        catch(err){ termLine('err', err.message); }
+        return;
+      }
+      st.history.push(v); st.hIdx=st.history.length;
+      try{ await api('exec',{method:'POST',body:{cmd:v}}); }
+      catch(err){ termLine('err','⚠ '+err.message); }
+    } else if(e.key==='ArrowUp'){
+      if(st.hIdx>0){ st.hIdx--; ci.value=st.history[st.hIdx]||''; e.preventDefault(); }
+    } else if(e.key==='ArrowDown'){
+      if(st.hIdx<st.history.length-1){ st.hIdx++; ci.value=st.history[st.hIdx]||''; }
+      else { st.hIdx=st.history.length; ci.value=''; }
+    }
+  });
+
+  document.addEventListener('keydown', e=>{
+    if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='s'){ e.preventDefault(); saveActive(); }
+    if((e.ctrlKey||e.metaKey) && e.key==='Enter'){ e.preventDefault(); runActive(); }
+  });
+  window.addEventListener('beforeunload', e=>{
+    const dirty = st.open.some(p=>st.buffers[p]!==st.saved[p]);
+    if(dirty){ e.preventDefault(); e.returnValue=''; }
+  });
+  window.addEventListener('resize', ()=>setTimeout(syncGutter,0));
+}
+function findFirst(nodes, fn){
+  for(const n of nodes){
+    if(fn(n)) return n;
+    if(n.children){ const r=findFirst(n.children,fn); if(r) return r; }
+  }
+  return null;
+}
+
+/* ---------- старт ---------- */
+(async function(){
+  bind();
+  connectEvents();
+  try{
+    const s = await api('state');
+    st.root=s.root; st.tools=s.tools; st.tree=s.tree;
+    $('wsPath').textContent=s.root;
+    $('ps').textContent = s.platform==='win32' ? '>' : '$';
+    renderTools(); renderTree();
+    termLine('sys','Робоча тека: '+s.root);
+    termLine('sys','node '+(s.tools.node||'—')+'  ·  python '+(s.tools.python||'—')+'  ·  go '+(s.tools.go||'не встановлено'));
+    termLine('sys','Ctrl+S — зберегти, Ctrl+Enter — запустити. Термінал приймає звичайні команди.');
+    const first = findFirst(st.tree, n=>!n.dir && /\.(js|py|go|html)$/i.test(n.name));
+    if(first) openFile(first.path);
+    setPane(window.innerWidth>=760 ? 'code' : 'code');
+  }catch(e){
+    termLine('err','Не вдалося зв’язатися з сервером: '+e.message);
+    termLine('sys','Переконайся, що відкрив посилання з токеном, яке надрукував server.js');
+  }
+})();
+</script>
+</body>
+</html>

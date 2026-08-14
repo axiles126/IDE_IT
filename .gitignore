@@ -16,3 +16,6 @@ local.properties
 
 # Claude Code (локальні налаштування машини)
 .claude/settings.local.json
+
+# Робоча тека IDE (експерименти, не частина проєкту)
+ide/workspace/
