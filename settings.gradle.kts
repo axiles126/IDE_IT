@@ -19,6 +19,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // драйвери USB-serial (CH340, CP210x, FTDI, CDC) публікуються лише тут
+        maven { url = uri("https://jitpack.io") }
     }
 }
 

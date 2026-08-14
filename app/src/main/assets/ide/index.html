@@ -234,6 +234,14 @@ body[data-pane="link"]  .pane.link2{display:flex}
         </div>
         <div id="boardsBody"></div>
       </div>
+
+      <div id="usbBox" style="margin-top:18px">
+        <div style="font-family:var(--mono);font-size:10px;letter-spacing:1.4px;text-transform:uppercase;
+                    color:var(--dim);border-top:1px solid var(--line);padding-top:14px;margin-bottom:10px">
+          Прошивка з телефона · OTG
+        </div>
+        <div id="usbBody"></div>
+      </div>
     </div></div>
   </section>
 </main>
@@ -606,6 +614,89 @@ async function loadBoards(){
   };
 }
 
+/* ---------------- прошивка через OTG ---------------- */
+const usb = { dev:null, busy:false };
+
+window.__usb = function(e){
+  if(!e) return;
+  if(e.t==='progress'){
+    const el=$('usbProgress');
+    if(el){ el.style.display=''; el.textContent='запис: '+e.m+'%'; }
+    return;
+  }
+  if(e.t==='devices'){ loadUsb(); return; }
+  if(e.t==='done'){
+    usb.busy=false;
+    const el=$('usbProgress'); if(el) el.style.display='none';
+    loadUsb();
+    return;
+  }
+  outLine(e.t==='err'?'err':(e.t==='ok'?'sys':(e.t==='out'?'log':'sys')), e.m);
+};
+
+function loadUsb(){
+  const box=$('usbBody'); if(!box||!B) return;
+  let r; try{ r=JSON.parse(B.usbList()); }catch(e){ r={ok:false,error:String(e)}; }
+  const devs = (r&&r.devices)||[];
+  if(usb.dev && !devs.some(d=>d.id===usb.dev)) usb.dev=null;
+  if(!usb.dev){ const first=devs.find(d=>d.driver); if(first) usb.dev=first.id; }
+
+  box.innerHTML =
+    (devs.length
+      ? devs.map(d=>{
+          const on = usb.dev===d.id;
+          return '<button class="wb" data-usb="'+d.id+'" style="width:100%;margin-bottom:6px;'+
+            'border-color:'+(on?'var(--cyan)':'var(--line)')+'">'+
+            '<div class="n" style="color:'+(on?'var(--cyan)':'var(--ink)')+'">'+esc(d.name||'пристрій')+'</div>'+
+            '<div class="r">'+esc(d.vid+':'+d.pid)+(d.driver?(' · '+esc(d.driver)):' · драйвера немає')+
+            (d.permission?' · дозволено':' · потрібен дозвіл')+'</div></button>';
+        }).join('')
+      : '<div style="color:var(--amber);font-size:12.5px;line-height:1.7">'+
+        'Пристроїв не видно. Під\'єднай плату OTG-кабелем, який передає дані, '+
+        'і переконайся, що плата живиться. Деякі телефони вмикають живлення USB лише в налаштуваннях.</div>')+
+
+    '<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px">'+
+      '<button class="btn ghost" id="uRefresh">оновити</button>'+
+      '<button class="btn" id="uPerm">Дозвіл</button>'+
+      '<button class="btn" id="uProbe">Перевірити плату</button>'+
+      '<button class="btn primary" id="uFlash">Прошити ▸</button>'+
+      '<button class="btn" id="uMon">Монітор</button>'+
+      '<button class="btn danger" id="uStop">Стоп</button>'+
+    '</div>'+
+    '<div id="usbProgress" class="r" style="display:none;margin-top:8px;font-family:var(--mono);'+
+      'font-size:12px;color:var(--green)"></div>'+
+    '<div style="margin-top:10px;font-size:11.5px;color:var(--dim);line-height:1.7">'+
+      'Двійковий файл збирає комп\'ютер, а запис у плату йде напряму з телефона. '+
+      'Спершу натисни «Перевірити плату» — це безпечно, нічого не пишеться.</div>';
+
+  box.querySelectorAll('[data-usb]').forEach(b=>b.onclick=()=>{ usb.dev=+b.dataset.usb; loadUsb(); });
+  $('uRefresh').onclick=loadUsb;
+  $('uPerm').onclick=()=>{ if(usb.dev==null) return B.toast('Обери пристрій'); B.usbPermission(usb.dev); };
+  $('uProbe').onclick=()=>{
+    if(usb.dev==null) return B.toast('Обери пристрій');
+    setPane('out'); usb.busy=true; B.usbProbe(usb.dev);
+  };
+  $('uMon').onclick=()=>{
+    if(usb.dev==null) return B.toast('Обери пристрій');
+    setPane('out'); B.usbMonitor(usb.dev, boards.baud||115200);
+  };
+  $('uStop').onclick=()=>B.usbStop();
+  $('uFlash').onclick=async()=>{
+    if(usb.dev==null) return B.toast('Обери пристрій');
+    if(!st.srv) { outLine('warn','Двійковий файл збирає комп\'ютер — увімкни зв\'язок вище.'); setPane('out'); return; }
+    if(!boards.sketch) return B.toast('Вкажи скетч');
+    setPane('out');
+    outLine('sys','Компілюю на комп\'ютері…');
+    try{
+      const plan = await srvFetch('artifacts',{method:'POST',
+        body:{sketch:boards.sketch, fqbn:fqbnFull()}});
+      outLine('sys','отримано '+plan.parts.length+' частин, '+Math.round(plan.total/1024)+' КБ — пишу в плату');
+      usb.busy=true;
+      B.usbFlash(usb.dev, JSON.stringify(plan), plan.uploadSpeed||115200);
+    }catch(e){ outLine('err','⚠ '+e.message); }
+  };
+}
+
 /* ---------------- панелі ---------------- */
 function setPane(n){
   document.body.dataset.pane=n;
@@ -693,6 +784,7 @@ $('delBtn').onclick=()=>{
     else { $('srvUrl').value='http://127.0.0.1:4321'; setLink(null); }
   }catch(e){ setLink(null); }
   try{ st.pyVer = B.pythonVersion(); }catch(e){ st.pyVer=''; }
+  try{ loadUsb(); }catch(e){}
   outLine('sys','IDE_IT — робоче місце на телефоні.');
   outLine('sys', st.pyVer
     ? 'HTML, CSS, JavaScript і Python '+st.pyVer+' виконуються прямо тут. Node.js і Go — через комп\'ютер (вкладка «ПК»).'

@@ -302,6 +302,31 @@ function guessByUsb(props) {
   return USB_KNOWN[vid + ':' + pid] || ('USB-пристрій ' + vid + ':' + pid);
 }
 
+/** Intel HEX → суцільний двійковий образ (для AVR через OTG). */
+function intelHexToBin(text) {
+  const chunks = [];
+  let maxAddr = 0, base = 0;
+  for (const raw of String(text).split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line.startsWith(':')) continue;
+    const bytes = [];
+    for (let i = 1; i + 1 < line.length; i += 2) bytes.push(parseInt(line.substr(i, 2), 16));
+    const len = bytes[0], addr = (bytes[1] << 8) | bytes[2], type = bytes[3];
+    if (type === 0x00) {
+      const at = base + addr;
+      chunks.push({ at, data: Buffer.from(bytes.slice(4, 4 + len)) });
+      maxAddr = Math.max(maxAddr, at + len);
+    } else if (type === 0x02) {
+      base = ((bytes[4] << 8) | bytes[5]) * 16;
+    } else if (type === 0x04) {
+      base = ((bytes[4] << 8) | bytes[5]) * 65536;
+    } else if (type === 0x01) break;
+  }
+  const out = Buffer.alloc(maxAddr, 0xFF);
+  for (const c of chunks) c.data.copy(out, c.at);
+  return out;
+}
+
 /** Параметри плати — те саме меню, що в Arduino IDE у розділі «Інструменти». */
 function boardOptions(fqbn) {
   const base = String(fqbn || '').split(':').slice(0, 3).join(':');
@@ -605,6 +630,79 @@ const server = http.createServer(async (req, res) => {
       const r = boardOptions(url.searchParams.get('fqbn'));
       return json(res, r.error ? 400 : 200, r);
     }
+    /* Двійкові частини прошивки для телефона: компілюємо й віддаємо у base64
+       разом зі зміщеннями, які телефон запише напряму через OTG. */
+    if (p === '/api/artifacts' && req.method === 'POST') {
+      if (!ACLI && !findArduinoCli()) return json(res, 400, { error: 'arduino-cli не знайдено' });
+      const b = await readBody(req);
+      const fqbn = String(b.fqbn || '').trim();
+      if (!fqbn) return json(res, 400, { error: 'не вибрано плату' });
+      let sk = safe(String(b.sketch || ''));
+      if (/\.ino$/i.test(sk)) sk = path.dirname(sk);
+
+      const outDir = path.join(os.tmpdir(), 'ide_it_build_' + crypto.randomBytes(4).toString('hex'));
+      const win = process.platform === 'win32';
+      const run = (args) => spawnSync(ACLI, ['--no-color'].concat(args), {
+        encoding: 'utf8', timeout: 300000, shell: win
+      });
+
+      const c = run(['compile', '--fqbn', fqbn, '--output-dir', outDir, sk]);
+      if (c.status !== 0) {
+        return json(res, 400, { error: 'компіляція не вдалася', output: (c.stdout || '') + (c.stderr || '') });
+      }
+      /* властивості плати: зміщення завантажувача та родина кристала */
+      const props = {};
+      const sp = run(['compile', '--fqbn', fqbn, '--show-properties', sk]);
+      String(sp.stdout || '').split('\n').forEach(line => {
+        const i = line.indexOf('=');
+        if (i > 0) props[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+      });
+      const mcu = (props['build.mcu'] || '').toLowerCase();
+      const isEsp = mcu.startsWith('esp');
+
+      const files = await fsp.readdir(outDir);
+      const pick = (re) => files.find(f => re.test(f));
+      const readB64 = async (f) => (await fsp.readFile(path.join(outDir, f))).toString('base64');
+      const parts = [];
+
+      try {
+        if (isEsp) {
+          const bootAddr = parseInt(props['build.bootloader_addr'] || '0x1000', 16);
+          const boot = pick(/\.bootloader\.bin$/i);
+          const partsBin = pick(/\.partitions\.bin$/i);
+          const app = pick(/^(?!.*(bootloader|partitions|merged)).*\.bin$/i);
+          if (boot) parts.push({ name: 'bootloader', offset: bootAddr, b64: await readB64(boot) });
+          if (partsBin) parts.push({ name: 'partitions', offset: 0x8000, b64: await readB64(partsBin) });
+          /* boot_app0 лежить у самому ядрі, не в теці збірки */
+          const core = props['runtime.platform.path'] || '';
+          const bootApp0 = core ? path.join(core, 'tools', 'partitions', 'boot_app0.bin') : '';
+          if (bootApp0 && fs.existsSync(bootApp0)) {
+            parts.push({ name: 'boot_app0', offset: 0xe000, b64: (await fsp.readFile(bootApp0)).toString('base64') });
+          }
+          if (app) parts.push({ name: 'app', offset: 0x10000, b64: await readB64(app) });
+        } else {
+          /* AVR: беремо .hex і перетворюємо на суцільний образ */
+          const hexFile = pick(/\.hex$/i) && !/with_bootloader/i.test(pick(/\.hex$/i))
+            ? pick(/^(?!.*with_bootloader).*\.hex$/i) : pick(/\.hex$/i);
+          if (!hexFile) throw new Error('не знайдено .hex');
+          const bin = intelHexToBin(await fsp.readFile(path.join(outDir, hexFile), 'utf8'));
+          parts.push({ name: 'flash', offset: 0, b64: bin.toString('base64') });
+        }
+      } finally {
+        fsp.rm(outDir, { recursive: true, force: true }).catch(() => {});
+      }
+
+      if (!parts.length) return json(res, 400, { error: 'збірка не дала двійкових файлів' });
+      return json(res, 200, {
+        ok: true,
+        family: isEsp ? 'esp32' : 'avr',
+        mcu,
+        uploadSpeed: Number(props['upload.speed'] || 115200),
+        total: parts.reduce((n, x) => n + Math.ceil(x.b64.length * 3 / 4), 0),
+        parts
+      });
+    }
+
     if (p === '/api/sketch' && req.method === 'POST') {
       const b = await readBody(req);
       const name = String(b.name || '').trim().replace(/[^A-Za-z0-9_-]/g, '');

@@ -2,6 +2,7 @@ package com.example.ide_it
 
 import android.annotation.SuppressLint
 import android.os.Bundle
+import android.util.Base64
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -33,6 +34,14 @@ class MainActivity : AppCompatActivity() {
     private lateinit var web: WebView
     private lateinit var workspace: File
     private val pyExecutor = Executors.newSingleThreadExecutor()
+    private val usbExecutor = Executors.newSingleThreadExecutor()
+    private val flasher by lazy { UsbFlasher(this) { kind, text -> usbEvent(kind, text) } }
+
+    /** Події прошивки → сторінка. */
+    private fun usbEvent(kind: String, text: String) {
+        val payload = JSONObject().put("t", kind).put("m", text).toString()
+        runOnUiThread { web.evaluateJavascript("window.__usb && window.__usb($payload)", null) }
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -222,6 +231,63 @@ class MainActivity : AppCompatActivity() {
         /** Шлях до робочої теки — показуємо користувачу. */
         @JavascriptInterface
         fun workspacePath(): String = workspace.absolutePath
+
+        /* ---------------- Плата через OTG ---------------- */
+
+        @JavascriptInterface
+        fun usbList(): String = try { flasher.listDevices() }
+        catch (e: Throwable) { fail(e.message ?: "не вдалося перелічити пристрої") }
+
+        @JavascriptInterface
+        fun usbPermission(deviceId: Int) {
+            flasher.requestPermission(deviceId) { granted ->
+                usbEvent(if (granted) "ok" else "err",
+                    if (granted) "дозвіл на пристрій отримано" else "дозвіл не надано")
+                usbEvent("devices", "")
+            }
+        }
+
+        /** Безпечна перевірка зв'язку з платою — нічого не пише у пам'ять. */
+        @JavascriptInterface
+        fun usbProbe(deviceId: Int) {
+            usbExecutor.execute { flasher.probeBoard(deviceId); usbEvent("done", "") }
+        }
+
+        /**
+         * Прошивка. plan — JSON із комп'ютера:
+         * {"family":"esp32"|"avr","parts":[{"offset":4096,"b64":"…"}]}
+         */
+        @JavascriptInterface
+        fun usbFlash(deviceId: Int, plan: String, baud: Int) {
+            usbExecutor.execute {
+                try {
+                    val j = JSONObject(plan)
+                    val arr = j.getJSONArray("parts")
+                    val parts = ArrayList<Pair<Long, ByteArray>>()
+                    for (i in 0 until arr.length()) {
+                        val o = arr.getJSONObject(i)
+                        parts.add(Pair(o.getLong("offset"),
+                            Base64.decode(o.getString("b64"), Base64.DEFAULT)))
+                    }
+                    if (j.optString("family") == "avr") {
+                        flasher.flashAvr(deviceId, parts.firstOrNull()?.second ?: ByteArray(0))
+                    } else {
+                        flasher.flashEsp32(deviceId, parts, baud)
+                    }
+                } catch (e: Throwable) {
+                    usbEvent("err", e.message ?: "не вдалося розібрати прошивку")
+                }
+                usbEvent("done", "")
+            }
+        }
+
+        @JavascriptInterface
+        fun usbMonitor(deviceId: Int, baud: Int) {
+            usbExecutor.execute { flasher.monitor(deviceId, baud); usbEvent("done", "") }
+        }
+
+        @JavascriptInterface
+        fun usbStop() { flasher.stopMonitor(); flasher.cancel() }
 
         /* ---------------- Python усередині телефона ---------------- */
 
