@@ -38,9 +38,22 @@ header{flex:0 0 auto;display:flex;align-items:center;gap:9px;padding:7px 11px;
 .tool.on{color:var(--green);border-color:#2a5e3e}
 .tool.off{color:var(--red);border-color:#5e2a2a}
 
-.bar{flex:0 0 auto;display:flex;gap:5px;align-items:center;padding:6px 8px;
+.bar{flex:0 0 auto;display:flex;gap:4px;align-items:center;padding:5px 7px;
   background:var(--panel2);border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
 .bar::-webkit-scrollbar{display:none}
+/* кнопки панелі: іконка + підпис */
+.tool-btn{display:inline-flex;align-items:center;gap:7px;padding:7px 11px;border-radius:5px;
+  border:1px solid var(--line2);background:var(--raise);color:var(--ink2);min-height:36px;
+  white-space:nowrap;flex:0 0 auto;font-family:var(--mono);font-size:10.5px;letter-spacing:.6px;
+  text-transform:uppercase;transition:.15s}
+.tool-btn svg{width:17px;height:17px;flex:0 0 auto}
+.tool-btn:hover{border-color:var(--green);color:var(--green)}
+.tool-btn.go{background:linear-gradient(180deg,#2f8f56,#1c6b3a);border-color:#3aa968;color:#06140b;font-weight:700}
+.tool-btn.go:hover{filter:brightness(1.1);color:#06140b}
+.tool-btn.stop{color:var(--red);border-color:#5e2a2a}
+.tool-btn.stop:hover{border-color:var(--red);color:var(--red)}
+.tool-btn:disabled{opacity:.35;cursor:not-allowed;border-color:var(--line);color:var(--dim)}
+.tool-sep{width:1px;align-self:stretch;background:var(--line);margin:2px 4px;flex:0 0 auto}
 
 main{flex:1 1 auto;min-height:0;display:grid;gap:6px;padding:6px;
   grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto;grid-template-areas:"pane" "switch"}
@@ -153,6 +166,8 @@ body[data-pane="boards"] .pane.boards{display:flex}
   .wsPath{display:none}
   .bar{padding:4px 6px}
   .btn{min-height:30px;padding:5px 9px;font-size:10px}
+  .tool-btn{min-height:30px;padding:4px 8px;gap:5px;font-size:9.5px}
+  .tool-btn svg{width:15px;height:15px}
   main{gap:5px;padding:5px}
 }
 @media(orientation:landscape) and (max-height:620px) and (min-width:660px){
@@ -184,17 +199,54 @@ body[data-pane="boards"] .pane.boards{display:flex}
   <div class="hdr-right" id="tools"></div>
 </header>
 
+<!-- набір іконок -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <g id="i-run"><path d="M8 5.2 19.5 12 8 18.8Z" fill="currentColor" stroke="currentColor"
+       stroke-width="1.6" stroke-linejoin="round"/></g>
+    <g id="i-stop"><rect x="6.5" y="6.5" width="11" height="11" rx="1.6" fill="currentColor"/></g>
+    <g id="i-save"><path d="M5 4h11l3 3v13H5Z"/><path d="M8.5 4v5h7V4"/><rect x="8" y="13" width="8" height="7"/></g>
+    <g id="i-eye"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/>
+       <circle cx="12" cy="12" r="3.2"/></g>
+    <g id="i-chip"><rect x="7" y="7" width="10" height="10" rx="1.5"/>
+       <path d="M10 3.5v3.5M14 3.5v3.5M10 17v3.5M14 17v3.5M3.5 10H7M3.5 14H7M17 10h3.5M17 14h3.5"/></g>
+    <g id="i-newfile"><path d="M6 3h8l4 4v14H6Z"/><path d="M14 3v4h4"/><path d="M12 11v6M9 14h6"/></g>
+    <g id="i-newdir"><path d="M3 6.5h6l2 2.5h10V19H3Z"/><path d="M13 12.5v4M11 14.5h4"/></g>
+    <g id="i-trash"><path d="M4.5 6.5h15"/><path d="M9.5 6.5V4h5v2.5"/><path d="M6.5 6.5 7.6 20h8.8l1.1-13.5"/>
+       <path d="M10.3 10v6M13.7 10v6"/></g>
+    <g id="i-refresh"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20.5 4v4.5H16"/></g>
+  </defs>
+</svg>
+
 <div class="bar">
-  <button class="btn primary" id="runBtn" title="Ctrl+Enter">▸ Запустити</button>
-  <button class="btn danger" id="stopBtn" disabled>■ Стоп</button>
-  <button class="btn" id="saveBtn" title="Ctrl+S">Зберегти</button>
-  <button class="btn ghost" id="previewBtn">Переглянути</button>
-  <button class="btn ghost" id="boardsBtn">Плати</button>
+  <button class="tool-btn go" id="runBtn" title="Запустити · Ctrl+Enter">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+         stroke-linecap="round"><use href="#i-run"/></svg>Запустити</button>
+  <button class="tool-btn stop" id="stopBtn" disabled title="Зупинити процес">
+    <svg viewBox="0 0 24 24" fill="none"><use href="#i-stop"/></svg>Стоп</button>
+  <button class="tool-btn" id="saveBtn" title="Зберегти · Ctrl+S">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+         stroke-linecap="round" stroke-linejoin="round"><use href="#i-save"/></svg>Зберегти</button>
+  <span class="tool-sep"></span>
+  <button class="tool-btn" id="previewBtn" title="Показати HTML-сторінку">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+         stroke-linecap="round" stroke-linejoin="round"><use href="#i-eye"/></svg>Перегляд</button>
+  <button class="tool-btn" id="boardsBtn" title="Arduino та ESP32">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+         stroke-linecap="round" stroke-linejoin="round"><use href="#i-chip"/></svg>Плати</button>
   <span class="sp"></span>
-  <button class="btn ghost" id="newFileBtn">+ файл</button>
-  <button class="btn ghost" id="newDirBtn">+ тека</button>
-  <button class="btn ghost" id="delBtn">видалити</button>
-  <button class="btn ghost" id="reloadBtn">оновити</button>
+  <button class="tool-btn" id="newFileBtn" title="Новий файл">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+         stroke-linecap="round" stroke-linejoin="round"><use href="#i-newfile"/></svg>Файл</button>
+  <button class="tool-btn" id="newDirBtn" title="Нова тека">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+         stroke-linecap="round" stroke-linejoin="round"><use href="#i-newdir"/></svg>Тека</button>
+  <button class="tool-btn" id="delBtn" title="Видалити вибраний файл">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+         stroke-linecap="round" stroke-linejoin="round"><use href="#i-trash"/></svg>Видалити</button>
+  <button class="tool-btn" id="reloadBtn" title="Перечитати дерево файлів">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+         stroke-linecap="round" stroke-linejoin="round"><use href="#i-refresh"/></svg>Оновити</button>
   <span class="status" id="status"></span>
 </div>
 
