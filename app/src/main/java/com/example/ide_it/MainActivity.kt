@@ -11,9 +11,12 @@ import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import com.chaquo.python.Python
+import com.chaquo.python.android.AndroidPlatform
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.util.concurrent.Executors
 
 /**
  * IDE_IT — середовище розробки на телефоні.
@@ -29,6 +32,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var web: WebView
     private lateinit var workspace: File
+    private val pyExecutor = Executors.newSingleThreadExecutor()
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -38,6 +42,9 @@ class MainActivity : AppCompatActivity() {
 
         workspace = File(filesDir, "workspace").apply { mkdirs() }
         seedSamples()
+
+        // CPython усередині застосунку — Python працює без комп'ютера
+        if (!Python.isStarted()) Python.start(AndroidPlatform(this))
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -215,6 +222,33 @@ class MainActivity : AppCompatActivity() {
         /** Шлях до робочої теки — показуємо користувачу. */
         @JavascriptInterface
         fun workspacePath(): String = workspace.absolutePath
+
+        /* ---------------- Python усередині телефона ---------------- */
+
+        @JavascriptInterface
+        fun pythonVersion(): String = try {
+            Python.getInstance().getModule("runner").callAttr("version").toString()
+        } catch (e: Throwable) { "" }
+
+        /**
+         * Виконує код у фоновому потоці, щоб інтерфейс не завмирав,
+         * і повертає вивід сторінці через window.__pyResult(...).
+         */
+        @JavascriptInterface
+        fun runPython(code: String) {
+            pyExecutor.execute {
+                val payload = JSONObject()
+                try {
+                    val text = Python.getInstance().getModule("runner")
+                        .callAttr("run", code).toString()
+                    payload.put("ok", true).put("output", text)
+                } catch (e: Throwable) {
+                    payload.put("ok", false).put("error", e.message ?: e.toString())
+                }
+                val js = "window.__pyResult && window.__pyResult($payload)"
+                runOnUiThread { web.evaluateJavascript(js, null) }
+            }
+        }
 
         @JavascriptInterface
         fun toast(msg: String) {

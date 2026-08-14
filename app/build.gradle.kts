@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.chaquopy)
 }
 
 android {
@@ -18,6 +19,20 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Python усередині застосунку постачається як нативна бібліотека.
+        // Python 3.12 у Chaquopy існує лише для 64-бітних ABI:
+        // arm64-v8a — усі сучасні телефони, x86_64 — емулятор.
+        ndk {
+            abiFilters += listOf("arm64-v8a", "x86_64")
+        }
+    }
+
+    // CPython у складі застосунку: Python працює без комп'ютера
+    chaquopy {
+        defaultConfig {
+            version = "3.12"
+        }
     }
 
     buildTypes {

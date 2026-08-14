@@ -154,6 +154,7 @@ body[data-pane="link"]  .pane.link2{display:flex}
 
 <div class="bar">
   <button class="btn primary" id="runBtn">▸ Запустити</button>
+  <button class="btn" id="runPcBtn">▸ на ПК</button>
   <button class="btn" id="saveBtn">Зберегти</button>
   <button class="btn ghost" id="newBtn">+ файл</button>
   <button class="btn ghost" id="delBtn">видалити</button>
@@ -202,9 +203,11 @@ body[data-pane="link"]  .pane.link2{display:flex}
     <div class="paneh"><span class="t">Зв'язок із комп'ютером</span></div>
     <div class="paneb"><div class="form">
       <div class="note">
-        <b>HTML, CSS і JavaScript</b> виконуються прямо тут, на телефоні — зв'язок не потрібен.<br><br>
-        <b>Python, Node.js і Go</b> на Android відсутні. Щоб запускати їх, увімкни на комп'ютері
-        <code>node ide/server.js</code> і вкажи адресу нижче.<br><br>
+        <b>HTML, CSS, JavaScript і Python</b> виконуються прямо тут, на телефоні — зв'язок не потрібен.
+        Python справжній, CPython у складі застосунку.<br><br>
+        <b>Node.js і Go</b> на Android відсутні. Щоб запускати їх — а також Python із бібліотеками,
+        яких немає у застосунку, — увімкни на комп'ютері <code>node ide/server.js</code> і вкажи адресу нижче.
+        Кнопка <b>«▸ на ПК»</b> надсилає поточний файл на комп'ютер незалежно від мови.<br><br>
         Телефон під'єднано кабелем? Виконай на комп'ютері<br>
         <code>adb reverse tcp:4321 tcp:4321</code><br>
         і залиш адресу <code>http://127.0.0.1:4321</code>.<br><br>
@@ -223,6 +226,14 @@ body[data-pane="link"]  .pane.link2{display:flex}
         <button class="btn ghost danger" id="forgetBtn">Забути</button>
       </div>
       <div class="note" id="linkStatus" style="margin-top:13px;display:none"></div>
+
+      <div id="boardsBox" style="display:none;margin-top:18px">
+        <div style="font-family:var(--mono);font-size:10px;letter-spacing:1.4px;text-transform:uppercase;
+                    color:var(--dim);border-top:1px solid var(--line);padding-top:14px;margin-bottom:10px">
+          Плати · Arduino / ESP32
+        </div>
+        <div id="boardsBody"></div>
+      </div>
     </div></div>
   </section>
 </main>
@@ -376,14 +387,31 @@ async function runRemote(){
   }
 }
 
+/* ---------------- Python усередині телефона ---------------- */
+function runPythonLocal(){
+  setPane('out');
+  outLine('cmd','$ python '+st.active+'   (на телефоні · CPython '+(st.pyVer||'3.12')+')');
+  $('runBtn').disabled=true;
+  B.runPython(st.buf[st.active]);
+}
+window.__pyResult = function(r){
+  $('runBtn').disabled=false;
+  if(r && r.ok){
+    if(r.output) out('log', r.output);
+    outLine('sys','[виконано]');
+  } else {
+    outLine('err','Python не запустився: '+((r&&r.error)||'невідома помилка'));
+  }
+};
+
 function runActive(){
   if(!st.active){ B.toast('Обери файл'); return; }
   if(!saveActive()) return;
   const e = extOf(st.active);
   if(e==='html'||e==='htm'||e==='css') return showPreview();
-  if(e==='js' && !st.srv) return runLocalJs(st.buf[st.active]);
-  if(e==='js' && st.srv) return runRemote();          // на ПК — справжній Node.js
-  return runRemote();                                  // py, go, ts…
+  if(e==='js') return runLocalJs(st.buf[st.active]);   // JS — рушій телефона
+  if(e==='py' && st.pyVer) return runPythonLocal();    // Python — усередині застосунку
+  return runRemote();                                  // go, ts, node… — через комп'ютер
 }
 
 /* ---------------- зв'язок із ПК ---------------- */
@@ -425,10 +453,157 @@ async function testConnection(){
       '<br>go: '+esc(j.tools.go||'не встановлено');
     setLink({url,token});
     outLine('sys','Зв\'язок із комп\'ютером встановлено: '+url);
+    loadBoards();
   }catch(e){
     box.innerHTML='<b style="color:var(--red)">Не вийшло:</b> '+esc(e.message)+
       '<br>Перевір, що сервер запущено, адреса правильна, а телефон у тій самій мережі.';
   }
+}
+
+/* ---------------- плати через комп'ютер ---------------- */
+const boards = { port:'', fqbn:'', sketch:'', baud:115200, opts:{}, defs:{}, optList:[] };
+
+function fqbnFull(){
+  const pairs = boards.optList
+    .map(o=>[o.id, boards.opts[o.id]])
+    .filter(([id,v])=>v && v!==boards.defs[id])
+    .map(([id,v])=>id+'='+v);
+  return boards.fqbn + (pairs.length? ':'+pairs.join(',') : '');
+}
+
+async function loadBoardOptions(){
+  const host=$('boardOpts'); if(!host||!st.srv||!boards.fqbn) return;
+  host.innerHTML='<div style="color:var(--dim);font-size:11.5px;font-family:var(--mono)">читаю параметри…</div>';
+  let r;
+  try{ r = await srvFetch('boardoptions?fqbn='+encodeURIComponent(boards.fqbn)); }
+  catch(e){ host.innerHTML='<div style="color:var(--amber);font-size:12px">'+esc(e.message)+'</div>'; return; }
+
+  boards.optList=r.options||[];
+  boards.defs={};
+  boards.optList.forEach(o=>{
+    const def=(o.values.find(v=>v.selected)||o.values[0]||{}).value;
+    boards.defs[o.id]=def;
+    if(boards.opts[o.id]===undefined) boards.opts[o.id]=def;
+  });
+  if(!boards.optList.length){ host.innerHTML=''; return; }
+
+  host.innerHTML =
+    '<div style="font-family:var(--mono);font-size:10px;letter-spacing:1.2px;text-transform:uppercase;'+
+      'color:var(--dim);margin:14px 0 6px">Параметри плати</div>'+
+    boards.optList.map(o=>
+      '<div class="field" style="margin-bottom:8px"><label>'+esc(o.label)+'</label>'+
+      '<select data-opt="'+esc(o.id)+'" style="width:100%;background:var(--bg);border:1px solid '+
+        (boards.opts[o.id]!==boards.defs[o.id]?'var(--amber)':'var(--line2)')+';border-radius:6px;'+
+        'padding:11px;min-height:44px;font-family:var(--mono);font-size:12px">'+
+        o.values.map(v=>'<option value="'+esc(v.value)+'"'+(boards.opts[o.id]===v.value?' selected':'')+'>'+
+          esc(v.label)+'</option>').join('')+
+      '</select></div>').join('')+
+    '<div style="font-size:11px;color:var(--dim);font-family:var(--mono);word-break:break-all">FQBN: '+
+      '<span style="color:var(--cyan)">'+esc(fqbnFull())+'</span></div>';
+
+  host.querySelectorAll('[data-opt]').forEach(sel=>{
+    sel.onchange=e=>{ boards.opts[sel.dataset.opt]=e.target.value; loadBoardOptions(); };
+  });
+}
+
+async function srvFetch(p, opts){
+  opts=opts||{};
+  const res = await fetch(st.srv.url+'/api/'+p, {
+    method: opts.method||'GET',
+    headers: Object.assign({'x-ide-token':st.srv.token}, opts.body?{'Content-Type':'application/json'}:{}),
+    body: opts.body? JSON.stringify(opts.body): undefined
+  });
+  const j = await res.json();
+  if(j.error) throw new Error(j.error);
+  return j;
+}
+
+async function loadBoards(){
+  const box=$('boardsBody'); if(!box) return;
+  $('boardsBox').style.display = st.srv ? '' : 'none';
+  if(!st.srv) return;
+  box.innerHTML='<div style="color:var(--dim);font-family:var(--mono);font-size:12px">шукаю плати…</div>';
+  let s;
+  try{ s = await srvFetch('boards'); }
+  catch(e){ box.innerHTML='<div style="color:var(--red);font-size:12.5px">'+esc(e.message)+'</div>'; return; }
+
+  if(!s.available){
+    box.innerHTML='<div style="color:var(--amber);font-size:12.5px;line-height:1.7">'+esc(s.hint||'')+'</div>';
+    return;
+  }
+  const known = s.ports.find(p=>p.fqbn);
+  if(!boards.port) boards.port = (known&&known.address) || (s.ports[0]||{}).address || '';
+  if(!boards.fqbn) boards.fqbn = (known&&known.fqbn) || (s.presets[0]||{}).fqbn || '';
+
+  box.innerHTML =
+    '<div style="font-size:11.5px;color:var(--dim);font-family:var(--mono);margin-bottom:9px">Ядра: '+
+      (s.cores.length? s.cores.map(c=>esc(c.id)).join(' · ') : 'не встановлено')+'</div>'+
+    (s.ports.length
+      ? s.ports.map(p=>{
+          const on=boards.port===p.address;
+          const what=p.board||p.guess||'плата не розпізнана';
+          const idc=(p.vid&&p.pid)?(' · '+p.vid+':'+p.pid):'';
+          return '<button class="wb" data-bport="'+esc(p.address)+'" style="width:100%;margin-bottom:6px;'+
+          'border-color:'+(on?'var(--cyan)':'var(--line)')+'">'+
+          '<div class="n" style="font-family:var(--mono);color:'+(on?'var(--cyan)':'var(--ink)')+'">'+
+          esc(p.address)+'</div><div class="r">'+esc(what+idc)+'</div>'+
+          (p.fqbn?'<div class="r" style="color:var(--green)">'+esc(p.fqbn)+'</div>':'')+'</button>';
+        }).join('')
+      : '<div style="color:var(--amber);font-size:12.5px">Портів не знайдено — під\'єднай плату до комп\'ютера.</div>')+
+
+    '<div class="field" style="margin-top:12px"><label for="bFqbn">Плата</label>'+
+    '<select id="bFqbn" style="width:100%;background:var(--bg);border:1px solid var(--line2);border-radius:6px;'+
+      'padding:12px;min-height:46px;font-family:var(--mono);font-size:12.5px">'+
+      s.presets.map(b=>'<option value="'+esc(b.fqbn)+'"'+(boards.fqbn===b.fqbn?' selected':'')+'>'+esc(b.name)+'</option>').join('')+
+    '</select></div>'+
+
+    '<div id="boardOpts"></div>'+
+
+    '<div class="field" style="margin-top:12px"><label for="bBaud">Швидкість монітора</label>'+
+    '<select id="bBaud" style="width:100%;background:var(--bg);border:1px solid var(--line2);border-radius:6px;'+
+      'padding:12px;min-height:46px;font-family:var(--mono);font-size:12.5px">'+
+      [9600,19200,38400,57600,74880,115200,230400,460800,921600].map(b=>
+        '<option value="'+b+'"'+(boards.baud===b?' selected':'')+'>'+b+' бод</option>').join('')+
+    '</select></div>'+
+
+    '<div class="field"><label for="bSketch">Скетч на комп\'ютері</label>'+
+    '<input id="bSketch" placeholder="sketches/blink/blink.ino" value="'+esc(boards.sketch)+'"></div>'+
+    '<div style="display:flex;gap:7px;flex-wrap:wrap">'+
+      '<button class="btn" id="bNew">новий скетч</button>'+
+      '<button class="btn" id="bCompile">Компілювати</button>'+
+      '<button class="btn primary" id="bUpload">Прошити ▸</button>'+
+      '<button class="btn" id="bMonitor">Монітор</button>'+
+    '</div>';
+
+  box.querySelectorAll('[data-bport]').forEach(b=>b.onclick=()=>{
+    boards.port=b.dataset.bport;
+    const hit=s.ports.find(p=>p.address===b.dataset.bport);
+    if(hit&&hit.fqbn){ boards.fqbn=hit.fqbn; boards.opts={}; }
+    loadBoards();
+  });
+  $('bFqbn').onchange=e=>{ boards.fqbn=e.target.value; boards.opts={}; loadBoardOptions(); };
+  $('bBaud').onchange=e=>{ boards.baud=+e.target.value; };
+  $('bSketch').oninput=e=>{ boards.sketch=e.target.value.trim(); };
+  loadBoardOptions();
+  $('bNew').onclick=async()=>{
+    const name=prompt('Назва скетчу латиницею','blink'); if(!name) return;
+    try{ const r=await srvFetch('sketch',{method:'POST',body:{name}});
+      boards.sketch=r.path; loadBoards(); B.toast('Створено '+r.path); }
+    catch(e){ B.toast(e.message); }
+  };
+  const act=async(ep,extra)=>{
+    if(ep!=='monitor' && !boards.sketch) return B.toast('Вкажи скетч');
+    setPane('out');
+    try{ await srvFetch(ep,{method:'POST',body:Object.assign({sketch:boards.sketch,fqbn:fqbnFull()},extra||{})}); }
+    catch(e){ outLine('err','⚠ '+e.message); }
+  };
+  $('bCompile').onclick=()=>act('compile');
+  $('bUpload').onclick=()=>{ if(!boards.port) return B.toast('Обери порт'); act('upload',{port:boards.port}); };
+  $('bMonitor').onclick=()=>{
+    if(!boards.port) return B.toast('Обери порт');
+    outLine('sys','Монітор '+boards.port+' @'+boards.baud+' — «стоп» зупиняє.');
+    act('monitor',{port:boards.port,baud:boards.baud});
+  };
 }
 
 /* ---------------- панелі ---------------- */
@@ -477,6 +652,7 @@ $('keys').addEventListener('click', e=>{
 });
 
 $('runBtn').onclick=runActive;
+$('runPcBtn').onclick=()=>{ if(!st.active) return B.toast('Обери файл'); if(saveActive()) runRemote(); };
 $('saveBtn').onclick=saveActive;
 $('reloadBtn').onclick=()=>{ loadTree(); B.toast('Оновлено'); };
 $('clearOutBtn').onclick=()=>{ $('out').textContent=''; };
@@ -513,11 +689,14 @@ $('delBtn').onclick=()=>{
   loadTree();
   try{
     const raw=localStorage.getItem('ide_srv');
-    if(raw){ const s=JSON.parse(raw); $('srvUrl').value=s.url; $('srvToken').value=s.token; setLink(s); }
+    if(raw){ const s=JSON.parse(raw); $('srvUrl').value=s.url; $('srvToken').value=s.token; setLink(s); loadBoards(); }
     else { $('srvUrl').value='http://127.0.0.1:4321'; setLink(null); }
   }catch(e){ setLink(null); }
+  try{ st.pyVer = B.pythonVersion(); }catch(e){ st.pyVer=''; }
   outLine('sys','IDE_IT — робоче місце на телефоні.');
-  outLine('sys','HTML, CSS і JavaScript виконуються тут. Python, Node.js і Go — через комп\'ютер (вкладка «ПК»).');
+  outLine('sys', st.pyVer
+    ? 'HTML, CSS, JavaScript і Python '+st.pyVer+' виконуються прямо тут. Node.js і Go — через комп\'ютер (вкладка «ПК»).'
+    : 'HTML, CSS і JavaScript виконуються тут. Python, Node.js і Go — через комп\'ютер (вкладка «ПК»).');
   const first = st.files.find(f=>!f.dir && /\.(js|html|py|go|css)$/i.test(f.name));
   if(first) openFile(first.path); else setPane('files');
 })();

@@ -49,7 +49,8 @@ main{flex:1 1 auto;min-height:0;display:grid;gap:6px;padding:6px;
 body[data-pane="files"] .pane.files,
 body[data-pane="code"]  .pane.code,
 body[data-pane="term"]  .pane.term,
-body[data-pane="prev"]  .pane.prev{display:flex}
+body[data-pane="prev"]  .pane.prev,
+body[data-pane="boards"] .pane.boards{display:flex}
 .paneh{flex:0 0 auto;display:flex;align-items:center;gap:7px;padding:6px 9px;
   border-bottom:1px solid var(--line);background:var(--panel2);min-height:36px}
 .paneh .t{font-family:var(--mono);font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--dim)}
@@ -126,17 +127,24 @@ body[data-pane="prev"]  .pane.prev{display:flex}
   .pane.files{grid-area:files;display:flex}
   .pane.code{grid-area:code;display:flex}
   .pane.term{grid-area:term;display:flex}
-  .pane.prev{grid-area:code;display:none}
-  body[data-prev="1"] .pane.prev{display:flex}
-  body[data-prev="1"] .pane.code{display:none}
+  .pane.prev,.pane.boards{grid-area:code;display:none}
+  body[data-right="prev"] .pane.prev{display:flex}
+  body[data-right="boards"] .pane.boards{display:flex}
+  body[data-right="prev"] .pane.code,
+  body[data-right="boards"] .pane.code{display:none}
   .switch{display:none}
 }
 @media(min-width:1200px){
   main{grid-template-columns:210px minmax(0,1.3fr) minmax(320px,1fr);
        grid-template-rows:minmax(0,1.5fr) minmax(0,1fr);
        grid-template-areas:"files code prev" "files term prev"}
-  .pane.prev{grid-area:prev;display:flex}
-  body[data-prev="1"] .pane.code{display:flex}
+  .pane.prev,.pane.boards{grid-area:prev}
+  .pane.prev{display:flex}
+  .pane.boards{display:none}
+  body[data-right="boards"] .pane.boards{display:flex}
+  body[data-right="boards"] .pane.prev{display:none}
+  body[data-right="prev"] .pane.code,
+  body[data-right="boards"] .pane.code{display:flex}
 }
 @media(orientation:landscape) and (max-height:620px){
   header{padding:3px 9px}
@@ -181,6 +189,7 @@ body[data-pane="prev"]  .pane.prev{display:flex}
   <button class="btn danger" id="stopBtn" disabled>■ Стоп</button>
   <button class="btn" id="saveBtn" title="Ctrl+S">Зберегти</button>
   <button class="btn ghost" id="previewBtn">Переглянути</button>
+  <button class="btn ghost" id="boardsBtn">Плати</button>
   <span class="sp"></span>
   <button class="btn ghost" id="newFileBtn">+ файл</button>
   <button class="btn ghost" id="newDirBtn">+ тека</button>
@@ -235,11 +244,19 @@ body[data-pane="prev"]  .pane.prev{display:flex}
     </div>
   </section>
 
+  <section class="pane boards">
+    <div class="paneh"><span class="t">Плати · Arduino / ESP32</span>
+      <span class="r"><button class="btn ghost" id="boardsRefresh">знайти плати</button></span>
+    </div>
+    <div class="paneb"><div style="padding:12px" id="boardsBody"></div></div>
+  </section>
+
   <div class="switch" id="switch">
     <button data-pane="files">Файли</button>
     <button data-pane="code" class="on">Код</button>
     <button data-pane="term">Термінал</button>
     <button data-pane="prev">Перегляд</button>
+    <button data-pane="boards">Плати</button>
   </div>
 </main>
 
@@ -413,13 +430,195 @@ async function stopRun(){
   try{ await api('stop',{method:'POST',body:{id:st.running}}); }catch(e){}
 }
 
+/* ---------- права панель: перегляд або плати ---------- */
+function setRight(mode){ document.body.dataset.right = mode || ''; }
+
 /* ---------- перегляд ---------- */
 function showPreview(p){
   st.prevPath=p;
-  document.body.dataset.prev='1';
+  setRight('prev');
   $('prevPath').textContent=p;
   $('previewFrame').src='/preview/'+p.split('/').map(encodeURIComponent).join('/')+'?ts='+Date.now();
   if(window.innerWidth<760) setPane('prev');
+}
+
+/* ---------- плати: Arduino / ESP32 ---------- */
+const boards = { port:'', fqbn:'', sketch:'', baud:115200, opts:{}, defs:{}, optList:[] };
+
+/* FQBN із параметрами: до бази додаємо лише те, що відрізняється від типового,
+   рівно як робить Arduino IDE. */
+function fqbnFull(){
+  const pairs = boards.optList
+    .map(o => [o.id, boards.opts[o.id]])
+    .filter(([id,v]) => v && v !== boards.defs[id])
+    .map(([id,v]) => id+'='+v);
+  return boards.fqbn + (pairs.length ? ':'+pairs.join(',') : '');
+}
+
+async function loadBoardOptions(){
+  const host=$('boardOpts'); if(!host) return;
+  if(!boards.fqbn){ host.innerHTML=''; return; }
+  host.innerHTML='<div class="status">читаю параметри плати…</div>';
+  let r;
+  try{ r = await api('boardoptions?fqbn='+encodeURIComponent(boards.fqbn)); }
+  catch(e){ host.innerHTML='<div class="status" style="color:var(--amber)">'+esc(e.message)+'</div>'; return; }
+
+  boards.optList = r.options||[];
+  boards.defs = {};
+  boards.optList.forEach(o=>{
+    const def=(o.values.find(v=>v.selected)||o.values[0]||{}).value;
+    boards.defs[o.id]=def;
+    if(boards.opts[o.id]===undefined) boards.opts[o.id]=def;
+  });
+
+  if(!boards.optList.length){ host.innerHTML='<div class="status">у цієї плати немає налаштувань</div>'; return; }
+
+  host.innerHTML =
+    '<div style="font-family:var(--mono);font-size:10px;letter-spacing:1.2px;text-transform:uppercase;'+
+      'color:var(--dim);margin:13px 0 6px">Параметри плати · '+esc(r.name||'')+'</div>'+
+    boards.optList.map(o=>
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">'+
+      '<span class="status" style="flex:0 0 46%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+
+        esc(o.label)+'</span>'+
+      '<select data-opt="'+esc(o.id)+'" style="flex:1;min-width:0;background:var(--bg);'+
+        'border:1px solid '+(boards.opts[o.id]!==boards.defs[o.id]?'var(--amber)':'var(--line2)')+';'+
+        'border-radius:4px;padding:6px 8px;min-height:32px;font-family:var(--mono);font-size:11.5px">'+
+        o.values.map(v=>'<option value="'+esc(v.value)+'"'+(boards.opts[o.id]===v.value?' selected':'')+'>'+
+          esc(v.label)+'</option>').join('')+
+      '</select></div>').join('')+
+    '<div class="status" style="margin-top:7px">FQBN: <span style="color:var(--cyan)">'+esc(fqbnFull())+'</span>'+
+      ' · <button class="btn ghost" id="optReset" style="min-height:26px;padding:3px 8px">типові</button></div>';
+
+  host.querySelectorAll('[data-opt]').forEach(sel=>{
+    sel.onchange = e => { boards.opts[sel.dataset.opt]=e.target.value; loadBoardOptions(); };
+  });
+  const rb=$('optReset');
+  if(rb) rb.onclick=()=>{ boards.opts=Object.assign({},boards.defs); loadBoardOptions(); };
+}
+
+async function loadBoards(){
+  const box=$('boardsBody');
+  box.innerHTML='<div class="status">шукаю плати…</div>';
+  let s;
+  try{ s = await api('boards'); }
+  catch(e){ box.innerHTML='<div class="status" style="color:var(--red)">'+esc(e.message)+'</div>'; return; }
+
+  if(!s.available){
+    box.innerHTML='<div class="status" style="color:var(--amber);line-height:1.7">'+
+      esc(s.hint||'arduino-cli не знайдено')+'</div>';
+    return;
+  }
+  /* якщо плата розпізналась — підставляємо її FQBN */
+  const known = s.ports.find(p=>p.fqbn);
+  if(!boards.port) boards.port = (known && known.address) || (s.ports[0]||{}).address || '';
+  if(!boards.fqbn) boards.fqbn = (known && known.fqbn) || (s.presets[0]||{}).fqbn || '';
+  if(!boards.sketch && st.active && /\.ino$/i.test(st.active)) boards.sketch = st.active;
+
+  box.innerHTML =
+    '<div class="status" style="margin-bottom:9px">Ядра: '+
+      (s.cores.length? s.cores.map(c=>esc(c.id+' '+(c.version||''))).join(' · ') : 'не встановлено') +'</div>'+
+
+    '<div style="font-family:var(--mono);font-size:10px;letter-spacing:1.2px;text-transform:uppercase;'+
+      'color:var(--dim);margin:10px 0 5px">Порт</div>'+
+    (s.ports.length
+      ? s.ports.map(p=>{
+          const on = boards.port===p.address;
+          const what = p.board ? p.board : (p.guess || 'плата не розпізнана');
+          const idc = (p.vid&&p.pid) ? (' · '+p.vid+':'+p.pid) : '';
+          return '<button data-port="'+esc(p.address)+'" style="display:flex;'+
+          'justify-content:space-between;gap:8px;width:100%;text-align:left;border:1px solid '+
+          (on?'var(--cyan)':'var(--line)')+';border-radius:5px;padding:9px 11px;'+
+          'margin-bottom:5px;background:var(--panel2);min-height:40px;align-items:center">'+
+          '<span style="font-family:var(--mono);font-size:12.5px;color:'+(on?'var(--cyan)':'var(--ink2)')+'">'+
+          esc(p.address)+'</span><span class="status" style="text-align:right">'+esc(what)+
+          '<span style="color:var(--dim)">'+esc(idc)+'</span>'+
+          (p.fqbn?'<br><span style="color:var(--green)">'+esc(p.fqbn)+'</span>':'')+
+          '</span></button>';
+        }).join('')
+      : '<div class="status" style="color:var(--amber)">Портів не знайдено. Під\'єднай плату кабелем — і натисни «знайти плати».</div>')+
+
+    '<div style="font-family:var(--mono);font-size:10px;letter-spacing:1.2px;text-transform:uppercase;'+
+      'color:var(--dim);margin:13px 0 5px">Плата</div>'+
+    '<select id="fqbnSel" style="width:100%;background:var(--bg);border:1px solid var(--line2);border-radius:5px;'+
+      'padding:10px;min-height:40px;font-family:var(--mono);font-size:12.5px;margin-bottom:6px">'+
+      s.presets.map(b=>'<option value="'+esc(b.fqbn)+'"'+(boards.fqbn===b.fqbn?' selected':'')+'>'+
+        esc(b.name)+' — '+esc(b.fqbn)+'</option>').join('')+
+      '<option value="__custom"'+(s.presets.some(b=>b.fqbn===boards.fqbn)?'':' selected')+'>інша (вписати FQBN)</option>'+
+    '</select>'+
+    '<input id="fqbnCustom" placeholder="напр. esp32:esp32:esp32c3" value="'+esc(boards.fqbn)+'" '+
+      'style="width:100%;background:var(--bg);border:1px solid var(--line2);border-radius:5px;padding:10px;'+
+      'min-height:40px;font-family:var(--mono);font-size:12.5px">'+
+
+    '<div id="boardOpts"></div>'+
+
+    '<div style="font-family:var(--mono);font-size:10px;letter-spacing:1.2px;text-transform:uppercase;'+
+      'color:var(--dim);margin:13px 0 5px">Швидкість монітора</div>'+
+    '<select id="baudSel" style="width:100%;background:var(--bg);border:1px solid var(--line2);border-radius:5px;'+
+      'padding:10px;min-height:40px;font-family:var(--mono);font-size:12.5px">'+
+      [9600,19200,38400,57600,74880,115200,230400,460800,921600].map(b=>
+        '<option value="'+b+'"'+(boards.baud===b?' selected':'')+'>'+b+' бод</option>').join('')+
+    '</select>'+
+
+    '<div style="font-family:var(--mono);font-size:10px;letter-spacing:1.2px;text-transform:uppercase;'+
+      'color:var(--dim);margin:13px 0 5px">Скетч</div>'+
+    '<input id="sketchPath" placeholder="sketches/blink/blink.ino" value="'+esc(boards.sketch)+'" '+
+      'style="width:100%;background:var(--bg);border:1px solid var(--line2);border-radius:5px;padding:10px;'+
+      'min-height:40px;font-family:var(--mono);font-size:12.5px;margin-bottom:9px">'+
+
+    '<div class="row">'+
+      '<button class="btn" id="newSketchBtn">новий скетч</button>'+
+      '<button class="btn" id="compileBtn">Компілювати</button>'+
+      '<button class="btn primary" id="uploadBtn">Прошити ▸</button>'+
+      '<button class="btn ghost" id="monitorBtn">Монітор порту</button>'+
+    '</div>'+
+    '<div class="status" style="margin-top:10px;line-height:1.7">'+
+      'Прошивка йде через arduino-cli на цьому комп\'ютері. Вивід — у терміналі внизу.<br>'+
+      'Монітор порту зупиняється кнопкою «Стоп»; рядок терміналу шле текст у плату.</div>';
+
+  box.querySelectorAll('[data-port]').forEach(b=>b.onclick=()=>{
+    boards.port=b.dataset.port;
+    const hit=s.ports.find(p=>p.address===b.dataset.port);
+    if(hit && hit.fqbn){ boards.fqbn=hit.fqbn; boards.opts={}; }   // плата впізнана — беремо її FQBN
+    loadBoards();
+  });
+  $('fqbnSel').onchange=e=>{
+    if(e.target.value!=='__custom'){
+      boards.fqbn=e.target.value; boards.opts={};
+      $('fqbnCustom').value=e.target.value; loadBoardOptions();
+    }
+  };
+  $('fqbnCustom').oninput=e=>{ boards.fqbn=e.target.value.trim(); boards.opts={}; };
+  $('fqbnCustom').onchange=loadBoardOptions;
+  $('sketchPath').oninput=e=>{ boards.sketch=e.target.value.trim(); };
+  $('baudSel').onchange=e=>{ boards.baud=+e.target.value; };
+  loadBoardOptions();
+
+  $('newSketchBtn').onclick=async()=>{
+    const name=prompt('Назва скетчу латиницею (створиться тека з файлом .ino)','blink');
+    if(!name) return;
+    try{
+      const r=await api('sketch',{method:'POST',body:{name}});
+      boards.sketch=r.path; st.tree=r.tree; renderTree(); openFile(r.path); loadBoards();
+      status('створено '+r.path,'ok');
+    }catch(e){ status(e.message,'err'); }
+  };
+  const act = async (endpoint, extra) => {
+    if(st.active && st.buf[st.active]!==st.saved[st.active]) await saveActive();
+    setPane('term');
+    try{ await api(endpoint,{method:'POST',body:Object.assign({sketch:boards.sketch,fqbn:fqbnFull()},extra||{})}); }
+    catch(e){ termLine('err','⚠ '+e.message); }
+  };
+  $('compileBtn').onclick=()=>act('compile');
+  $('uploadBtn').onclick=()=>{
+    if(!boards.port) return status('спершу обери порт','err');
+    act('upload',{port:boards.port});
+  };
+  $('monitorBtn').onclick=()=>{
+    if(!boards.port) return status('спершу обери порт','err');
+    setPane('term');
+    termLine('sys','Монітор порту '+boards.port+' @'+boards.baud+' — рядок нижче шле текст у плату, «Стоп» зупиняє.');
+    api('monitor',{method:'POST',body:{port:boards.port,baud:boards.baud}}).catch(e=>termLine('err','⚠ '+e.message));
+  };
 }
 
 /* ---------- панелі ---------- */
@@ -503,7 +702,9 @@ function bind(){
     if(p) showPreview(p); else status('немає HTML-файла','err');
   };
   $('prevReload').onclick=()=>{ if(st.prevPath) showPreview(st.prevPath); };
-  $('prevClose').onclick=()=>{ document.body.dataset.prev=''; st.prevPath=null; $('previewFrame').src='about:blank'; };
+  $('prevClose').onclick=()=>{ setRight(''); st.prevPath=null; $('previewFrame').src='about:blank'; };
+  $('boardsBtn').onclick=()=>{ setRight('boards'); setPane('boards'); loadBoards(); };
+  $('boardsRefresh').onclick=loadBoards;
   $('clearTermBtn').onclick=()=>{ $('term').textContent=''; };
   $('reloadBtn').onclick=async()=>{ await refreshTree(); status('оновлено','ok'); };
 

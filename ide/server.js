@@ -192,18 +192,172 @@ function probe(cmd, args) {
   } catch {}
   return null;
 }
+/* arduino-cli може бути не в PATH — шукаємо у типових місцях */
+const ACLI_CANDIDATES = [
+  'arduino-cli',
+  'C:\\Program Files\\Arduino CLI\\arduino-cli.exe',
+  'C:\\Program Files (x86)\\Arduino CLI\\arduino-cli.exe',
+  path.join(os.homedir(), 'AppData', 'Local', 'Arduino15', 'arduino-cli.exe'),
+  '/usr/local/bin/arduino-cli',
+  '/usr/bin/arduino-cli'
+];
+let ACLI = null;
+function findArduinoCli() {
+  for (const c of ACLI_CANDIDATES) {
+    if (c.includes(path.sep) && !fs.existsSync(c)) continue;
+    if (probe(c, ['version'])) { ACLI = c; return c; }
+  }
+  ACLI = null;
+  return null;
+}
+
 let TOOLS = null;
 function detectTools() {
   const py = probe('python', ['--version']) || probe('py', ['--version']) || probe('python3', ['--version']);
+  const acli = findArduinoCli();
   TOOLS = {
     node: probe('node', ['--version']),
     npm: probe('npm', ['--version']),
     python: py,
     pythonCmd: probe('python', ['--version']) ? 'python' : (probe('py', ['--version']) ? 'py' : 'python3'),
     go: probe('go', ['version']),
-    git: probe('git', ['--version'])
+    git: probe('git', ['--version']),
+    arduinoCli: acli ? probe(acli, ['version']) : null
   };
   return TOOLS;
+}
+
+/* ------------------------------------------------------------------ */
+/* Плати: arduino-cli                                                  */
+/* ------------------------------------------------------------------ */
+const BOARD_PRESETS = [
+  { fqbn: 'esp32:esp32:esp32',      name: 'ESP32 Dev Module' },
+  { fqbn: 'esp32:esp32:esp32c3',    name: 'ESP32-C3' },
+  { fqbn: 'esp32:esp32:esp32s3',    name: 'ESP32-S3' },
+  { fqbn: 'esp32:esp32:esp32s2',    name: 'ESP32-S2' },
+  { fqbn: 'esp32:esp32:nodemcu-32s', name: 'NodeMCU-32S' },
+  { fqbn: 'arduino:avr:uno',        name: 'Arduino Uno' },
+  { fqbn: 'arduino:avr:nano',       name: 'Arduino Nano' },
+  { fqbn: 'arduino:avr:mega',       name: 'Arduino Mega 2560' },
+  { fqbn: 'arduino:avr:leonardo',   name: 'Arduino Leonardo' }
+];
+
+const SKETCH_TEMPLATE =
+`// %NAME% — прошивка плати
+// Компілювати й заливати кнопками на вкладці «Плати».
+
+// На платах Arduino LED_BUILTIN визначено ядром.
+// На більшості модулів ESP32 його немає — світлодіод зазвичай на GPIO2.
+#ifndef LED_BUILTIN
+#define LED_BUILTIN 2
+#endif
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(LED_BUILTIN, OUTPUT);
+  Serial.println("Плата запустилась");
+}
+
+void loop() {
+  digitalWrite(LED_BUILTIN, HIGH);
+  delay(500);
+  digitalWrite(LED_BUILTIN, LOW);
+  delay(500);
+  Serial.println("блимаю");
+}
+`;
+
+function acliJson(args) {
+  if (!ACLI && !findArduinoCli()) return { error: 'arduino-cli не знайдено' };
+  const r = spawnSync(ACLI, ['--no-color'].concat(args, ['--format', 'json']), {
+    encoding: 'utf8', timeout: 25000, shell: process.platform === 'win32'
+  });
+  if (r.error) return { error: r.error.message };
+  try { return { data: JSON.parse(r.stdout || '{}') }; }
+  catch (e) { return { error: 'не вдалося прочитати відповідь arduino-cli' }; }
+}
+
+/* Найпоширеніші USB-мікросхеми на платах: arduino-cli знає лише ті,
+   що мають «фірмовий» VID, решту підказуємо самі. */
+const USB_KNOWN = {
+  '1a86:7523': 'CH340 — типовий ESP32 / Arduino Nano (клон)',
+  '1a86:55d4': 'CH9102 — ESP32 / ESP32-C3',
+  '10c4:ea60': 'CP2102 — ESP32 DevKit / NodeMCU',
+  '0403:6001': 'FT232 — Arduino / ESP32 з FTDI',
+  '2341:0043': 'Arduino Uno',
+  '2341:0001': 'Arduino Uno (R1)',
+  '2341:0010': 'Arduino Mega 2560',
+  '2341:0042': 'Arduino Mega 2560 R3',
+  '2341:8036': 'Arduino Leonardo',
+  '2341:0070': 'Arduino Nano Every',
+  '303a:1001': 'ESP32-S2/S3 — вбудований USB',
+  '303a:0002': 'ESP32-S2',
+  '239a:80f2': 'Adafruit ESP32'
+};
+function guessByUsb(props) {
+  if (!props) return null;
+  const vid = String(props.vid || props.VID || '').replace(/^0x/i, '').toLowerCase().padStart(4, '0');
+  const pid = String(props.pid || props.PID || '').replace(/^0x/i, '').toLowerCase().padStart(4, '0');
+  if (!vid || vid === '0000') return null;
+  return USB_KNOWN[vid + ':' + pid] || ('USB-пристрій ' + vid + ':' + pid);
+}
+
+/** Параметри плати — те саме меню, що в Arduino IDE у розділі «Інструменти». */
+function boardOptions(fqbn) {
+  const base = String(fqbn || '').split(':').slice(0, 3).join(':');
+  if (!base) return { error: 'не вказано плату' };
+  const r = acliJson(['board', 'details', '--fqbn', base]);
+  if (r.error) return { error: r.error };
+  const d = r.data || {};
+  const options = (d.config_options || []).map(o => ({
+    id: o.option,
+    label: o.option_label || o.option,
+    values: (o.values || []).map(v => ({
+      value: v.value,
+      label: v.value_label || v.value,
+      selected: !!v.selected
+    }))
+  }));
+  return { name: d.name || base, base, options };
+}
+
+/** Порти, розпізнані плати та встановлені ядра. */
+function boardsState() {
+  if (!ACLI && !findArduinoCli()) {
+    return { available: false, hint: 'arduino-cli не знайдено. Встанови: https://arduino.github.io/arduino-cli/latest/installation/' };
+  }
+  const list = acliJson(['board', 'list']);
+  const cores = acliJson(['core', 'list']);
+  const ports = [];
+  const raw = list.data && (list.data.detected_ports || list.data);
+  if (Array.isArray(raw)) {
+    for (const item of raw) {
+      const p = item.port || {};
+      const matches = item.matching_boards || item.boards || [];
+      const props = p.properties || {};
+      ports.push({
+        address: p.address || item.address || '',
+        protocol: p.protocol || '',
+        label: p.protocol_label || p.label || '',
+        board: matches.length ? matches[0].name : null,
+        fqbn: matches.length ? matches[0].fqbn : null,
+        /* коли плата не має «фірмового» USB-ідентифікатора, підказуємо за мікросхемою */
+        guess: matches.length ? null : guessByUsb(props),
+        vid: props.vid || null,
+        pid: props.pid || null,
+        serial: props.serialNumber || null,
+        alternatives: matches.slice(1).map(m => ({ name: m.name, fqbn: m.fqbn }))
+      });
+    }
+  }
+  const installed = [];
+  const rawCores = cores.data && (cores.data.platforms || cores.data);
+  if (Array.isArray(rawCores)) {
+    for (const c of rawCores) {
+      installed.push({ id: c.id, name: c.name || (c.releases && c.releases[c.installed_version] && c.releases[c.installed_version].name), version: c.installed_version || c.installed });
+    }
+  }
+  return { available: true, ports, cores: installed, presets: BOARD_PRESETS, sketchDir: 'sketches' };
 }
 
 /* ------------------------------------------------------------------ */
@@ -442,6 +596,66 @@ const server = http.createServer(async (req, res) => {
       child.stdin.write(String(b.data ?? '') + '\n');
       return json(res, 200, { ok: true });
     }
+    /* ---------------- плати: Arduino / ESP32 ---------------- */
+    if (p === '/api/boards' && req.method === 'GET') {
+      return json(res, 200, boardsState());
+    }
+    if (p === '/api/boardoptions' && req.method === 'GET') {
+      if (!ACLI && !findArduinoCli()) return json(res, 400, { error: 'arduino-cli не знайдено' });
+      const r = boardOptions(url.searchParams.get('fqbn'));
+      return json(res, r.error ? 400 : 200, r);
+    }
+    if (p === '/api/sketch' && req.method === 'POST') {
+      const b = await readBody(req);
+      const name = String(b.name || '').trim().replace(/[^A-Za-z0-9_-]/g, '');
+      if (!name) return json(res, 400, { error: 'потрібна назва скетчу латиницею' });
+      const dir = safe(path.join('sketches', name));
+      await fsp.mkdir(dir, { recursive: true });
+      const ino = path.join(dir, name + '.ino');
+      try { await fsp.access(ino); }
+      catch { await fsp.writeFile(ino, SKETCH_TEMPLATE.replace('%NAME%', name), 'utf8'); }
+      return json(res, 200, { ok: true, path: 'sketches/' + name + '/' + name + '.ino', tree: await tree() });
+    }
+    if ((p === '/api/compile' || p === '/api/upload' || p === '/api/monitor') && req.method === 'POST') {
+      if (!ACLI && !findArduinoCli()) return json(res, 400, { error: 'arduino-cli не знайдено' });
+      const b = await readBody(req);
+      const win = process.platform === 'win32';
+
+      if (p === '/api/monitor') {
+        if (!b.port) return json(res, 400, { error: 'не вказано порт' });
+        const baud = String(b.baud || 115200).replace(/\D/g, '') || '115200';
+        return json(res, 200, {
+          id: launch({
+            cmd: ACLI, args: ['--no-color', 'monitor', '-p', b.port, '-c', 'baudrate=' + baud],
+            cwd: ROOT, label: 'monitor ' + b.port + ' @' + baud, shell: win
+          })
+        });
+      }
+
+      /* шлях до скетчу: приймаємо і .ino, і теку */
+      let sketch = String(b.sketch || '').trim();
+      if (!sketch) return json(res, 400, { error: 'не вказано скетч' });
+      let abs = safe(sketch);
+      if (/\.ino$/i.test(abs)) abs = path.dirname(abs);
+      try { if (!(await fsp.stat(abs)).isDirectory()) throw new Error(); }
+      catch { return json(res, 400, { error: 'скетч має лежати у теці з такою самою назвою (створи кнопкою «новий скетч»)' }); }
+
+      const fqbn = String(b.fqbn || '').trim();
+      if (!fqbn) return json(res, 400, { error: 'не вибрано плату (FQBN)' });
+
+      if (p === '/api/compile') {
+        return json(res, 200, {
+          id: launch({ cmd: ACLI, args: ['--no-color', 'compile', '--fqbn', fqbn, abs],
+            cwd: ROOT, label: 'compile ' + path.basename(abs) + ' [' + fqbn + ']', shell: win })
+        });
+      }
+      if (!b.port) return json(res, 400, { error: 'не вказано порт для прошивки' });
+      return json(res, 200, {
+        id: launch({ cmd: ACLI, args: ['--no-color', 'compile', '--fqbn', fqbn, '--upload', '-p', b.port, abs],
+          cwd: ROOT, label: 'upload → ' + b.port + ' [' + fqbn + ']', shell: win })
+      });
+    }
+
     if (p === '/api/stop' && req.method === 'POST') {
       const b = await readBody(req);
       let n = 0;
