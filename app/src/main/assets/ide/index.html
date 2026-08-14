@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>IDE_IT</title>
+<style>
+:root{
+  --bg:#0a0e12;--panel:#10171f;--panel2:#0c1219;--raise:#15202b;--line:#1d2a36;--line2:#26384a;
+  --ink:#cbd6de;--ink2:#9fb0bc;--dim:#64757f;
+  --amber:#f0a830;--green:#5fd38a;--red:#e5544b;--cyan:#4cc6d6;--violet:#9a8be0;
+  --mono:ui-monospace,'Droid Sans Mono',Consolas,monospace;
+  --body:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overscroll-behavior:none}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.45;
+  display:flex;flex-direction:column;height:100dvh;overflow:hidden}
+button,input,textarea,select{font-family:inherit;color:inherit;font-size:inherit}
+button{background:none;border:none;cursor:pointer}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
+
+header{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:8px 11px;
+  background:linear-gradient(180deg,#0c131b,#0a0e12);border-bottom:1px solid var(--line)}
+.logo{display:flex;align-items:center;gap:7px;min-width:0}
+.logo svg{width:23px;height:23px;flex:0 0 auto;color:var(--amber)}
+.logo .nm{font-family:var(--mono);font-weight:700;letter-spacing:2px;font-size:14px}
+.link{margin-left:auto;font-family:var(--mono);font-size:10px;letter-spacing:.5px;border:1px solid var(--line2);
+  border-radius:999px;padding:5px 10px;background:var(--panel2);color:var(--dim);white-space:nowrap}
+.link.on{color:var(--green);border-color:#2a5e3e}
+
+.bar{flex:0 0 auto;display:flex;gap:5px;align-items:center;padding:6px 8px;background:var(--panel2);
+  border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
+.bar::-webkit-scrollbar{display:none}
+.btn{font-family:var(--mono);font-size:11px;letter-spacing:.6px;text-transform:uppercase;padding:9px 12px;
+  border-radius:5px;border:1px solid var(--line2);background:var(--raise);color:var(--ink);
+  min-height:40px;white-space:nowrap;flex:0 0 auto}
+.btn:active{filter:brightness(1.3)}
+.btn.primary{background:linear-gradient(180deg,#2f8f56,#1c6b3a);border-color:#3aa968;color:#06140b;font-weight:700}
+.btn.ghost{background:transparent}
+.btn.danger{border-color:#5e2a2a;color:var(--red)}
+.btn:disabled{opacity:.4}
+
+main{flex:1 1 auto;min-height:0;position:relative}
+.pane{position:absolute;inset:0;display:none;flex-direction:column;min-height:0}
+body[data-pane="files"] .pane.files,
+body[data-pane="code"]  .pane.code,
+body[data-pane="out"]   .pane.out,
+body[data-pane="prev"]  .pane.prev,
+body[data-pane="link"]  .pane.link2{display:flex}
+
+.paneh{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:7px 11px;
+  border-bottom:1px solid var(--line);background:var(--panel2);min-height:38px}
+.paneh .t{font-family:var(--mono);font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--dim);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.paneh .r{margin-left:auto;display:flex;gap:6px;flex-shrink:0}
+.paneb{flex:1 1 auto;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch}
+
+/* файли */
+.tree{padding:6px}
+.frow{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:12px 12px;border-radius:6px;
+  color:var(--ink2);font-family:var(--mono);font-size:13px;min-height:48px}
+.frow:active{background:var(--raise)}
+.frow.on{background:var(--raise);color:var(--cyan)}
+.frow .ic{width:22px;text-align:center;flex:0 0 auto;color:var(--dim);font-size:11px}
+.frow.on .ic{color:var(--cyan)}
+.frow .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.frow .sz{font-size:10px;color:var(--dim)}
+
+/* редактор */
+.tabs{display:flex;gap:3px;overflow-x:auto;scrollbar-width:none;flex:1;min-width:0}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{font-family:var(--mono);font-size:11px;padding:6px 10px;border-radius:5px;color:var(--dim);
+  white-space:nowrap;min-height:32px;display:flex;align-items:center;gap:5px;flex:0 0 auto}
+.tabs button.on{background:var(--raise);color:var(--ink)}
+.tabs .dirty{color:var(--amber)}
+.edwrap{display:flex;height:100%;min-height:0;background:#080c10}
+.gutter{flex:0 0 auto;padding:10px 5px 10px 9px;text-align:right;font-family:var(--mono);font-size:13px;
+  line-height:1.55;color:#3a4a57;background:#080c10;user-select:none;overflow:hidden;white-space:pre}
+.editor{flex:1 1 auto;min-width:0;padding:10px 9px 10px 4px;background:#080c10;border:none;outline:none;
+  resize:none;font-family:var(--mono);font-size:13px;line-height:1.55;color:#d6e6dd;white-space:pre;
+  overflow:auto;tab-size:2}
+.keys{flex:0 0 auto;display:flex;gap:4px;padding:5px 6px;background:var(--panel2);border-top:1px solid var(--line);
+  overflow-x:auto;scrollbar-width:none}
+.keys::-webkit-scrollbar{display:none}
+.keys button{font-family:var(--mono);font-size:14px;min-width:40px;min-height:38px;border-radius:5px;
+  border:1px solid var(--line);background:var(--raise);color:var(--ink2);flex:0 0 auto}
+
+/* вивід */
+.out{padding:10px;font-family:var(--mono);font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.out .log{color:var(--ink2)}.out .err{color:var(--red)}.out .sys{color:var(--cyan)}
+.out .cmd{color:var(--green)}.out .warn{color:var(--amber)}
+
+.previewFrame{width:100%;height:100%;border:none;background:#fff;display:block}
+
+/* зв'язок */
+.form{padding:14px;max-width:520px;margin:0 auto;width:100%}
+.field{margin-bottom:13px}
+.field label{display:block;font-family:var(--mono);font-size:10px;letter-spacing:1.2px;text-transform:uppercase;
+  color:var(--dim);margin-bottom:6px}
+.field input{width:100%;background:var(--bg);border:1px solid var(--line2);border-radius:6px;padding:12px;
+  min-height:46px;font-family:var(--mono);font-size:13px}
+.field input:focus{outline:none;border-color:var(--cyan)}
+.note{border:1px dashed var(--line2);border-radius:6px;padding:11px;font-size:12.5px;line-height:1.65;
+  color:var(--ink2);margin-bottom:13px}
+.note b{color:var(--ink)}
+.note code{font-family:var(--mono);color:var(--amber);font-size:12px}
+
+/* нижній перемикач */
+.switch{flex:0 0 auto;display:flex;gap:4px;padding:5px 6px calc(5px + env(safe-area-inset-bottom));
+  background:var(--panel2);border-top:1px solid var(--line)}
+.switch button{flex:1;font-family:var(--mono);font-size:10px;letter-spacing:.3px;text-transform:uppercase;
+  color:var(--dim);padding:9px 2px;border-radius:5px;min-height:44px}
+.switch button.on{background:var(--raise);color:var(--cyan)}
+
+/* планшет / альбомна */
+@media(min-width:820px) and (orientation:landscape){
+  main{display:grid;grid-template-columns:210px 1fr;gap:0}
+  .pane{position:relative;inset:auto}
+  .pane.files{display:flex;border-right:1px solid var(--line)}
+  .pane.code{display:flex}
+  body[data-pane="out"] .pane.code,body[data-pane="prev"] .pane.code,body[data-pane="link"] .pane.code{display:none}
+  body[data-pane="out"] .pane.out,body[data-pane="prev"] .pane.prev,body[data-pane="link"] .pane.link2{display:flex}
+  .switch button[data-pane="files"]{display:none}
+}
+@media(orientation:landscape) and (max-height:480px){
+  header{padding:4px 9px}
+  .logo svg{width:18px;height:18px}
+  .btn{min-height:34px;padding:6px 10px}
+  .switch button{min-height:38px}
+  .keys{display:none}
+}
+</style>
+</head>
+<body data-pane="code">
+
+<header>
+  <div class="logo">
+    <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.6"
+         stroke-linecap="round" stroke-linejoin="round">
+      <path d="M31.5 7.5c5.2 2.6 7.6 7.6 5.9 12.4-1 2.9-2.9 5.4-5.4 8.1"/>
+      <path d="M32 28c-3.4-2.6-4.6-6.6-2.6-9.8 1.6-2.6 1.9-5.4.1-8.4"/>
+      <path d="M20.5 40c-1.4-5.4 3.4-11 11.5-11s12.9 5.6 11.5 11"/>
+      <path d="M14.5 49.5c0-5.6 7.6-9.5 17.5-9.5s17.5 3.9 17.5 9.5S41.9 59 32 59s-17.5-3.9-17.5-9.5Z"/>
+      <ellipse cx="26" cy="47" rx="2.1" ry="2.8" fill="currentColor" stroke="none"/>
+      <ellipse cx="38" cy="47" rx="2.1" ry="2.8" fill="currentColor" stroke="none"/>
+      <path d="M27 54c1.4-1.7 3.1-2.5 5-2.5s3.6.8 5 2.5"/>
+    </svg>
+    <span class="nm">IDE_IT</span>
+  </div>
+  <button class="link" id="linkPill">ПК: —</button>
+</header>
+
+<div class="bar">
+  <button class="btn primary" id="runBtn">▸ Запустити</button>
+  <button class="btn" id="saveBtn">Зберегти</button>
+  <button class="btn ghost" id="newBtn">+ файл</button>
+  <button class="btn ghost" id="delBtn">видалити</button>
+  <button class="btn ghost" id="stopBtn" disabled>■ стоп</button>
+</div>
+
+<main>
+  <section class="pane files">
+    <div class="paneh"><span class="t" id="wsPath">Файли</span>
+      <span class="r"><button class="btn ghost" id="reloadBtn">оновити</button></span>
+    </div>
+    <div class="paneb"><div class="tree" id="tree"></div></div>
+  </section>
+
+  <section class="pane code">
+    <div class="paneh">
+      <div class="tabs" id="tabs"></div>
+    </div>
+    <div class="paneb" style="overflow:hidden">
+      <div class="edwrap">
+        <div class="gutter" id="gutter">1</div>
+        <textarea class="editor" id="editor" spellcheck="false" autocapitalize="off"
+                  autocorrect="off" autocomplete="off" wrap="off"></textarea>
+      </div>
+    </div>
+    <div class="keys" id="keys"></div>
+  </section>
+
+  <section class="pane out">
+    <div class="paneh"><span class="t" id="outTitle">Вивід</span>
+      <span class="r"><button class="btn ghost" id="clearOutBtn">очистити</button></span>
+    </div>
+    <div class="paneb"><div class="out" id="out"></div></div>
+  </section>
+
+  <section class="pane prev">
+    <div class="paneh"><span class="t" id="prevTitle">Перегляд</span>
+      <span class="r"><button class="btn ghost" id="prevReload">оновити</button></span>
+    </div>
+    <div class="paneb" style="overflow:hidden">
+      <iframe class="previewFrame" id="prevFrame" sandbox="allow-scripts allow-modals" title="Перегляд"></iframe>
+    </div>
+  </section>
+
+  <section class="pane link2">
+    <div class="paneh"><span class="t">Зв'язок із комп'ютером</span></div>
+    <div class="paneb"><div class="form">
+      <div class="note">
+        <b>HTML, CSS і JavaScript</b> виконуються прямо тут, на телефоні — зв'язок не потрібен.<br><br>
+        <b>Python, Node.js і Go</b> на Android відсутні. Щоб запускати їх, увімкни на комп'ютері
+        <code>node ide/server.js</code> і вкажи адресу нижче.<br><br>
+        Телефон під'єднано кабелем? Виконай на комп'ютері<br>
+        <code>adb reverse tcp:4321 tcp:4321</code><br>
+        і залиш адресу <code>http://127.0.0.1:4321</code>.<br><br>
+        По Wi-Fi — вкажи адресу комп'ютера в мережі, наприклад <code>http://192.168.0.10:4321</code>.
+      </div>
+      <div class="field">
+        <label for="srvUrl">Адреса сервера</label>
+        <input id="srvUrl" placeholder="http://127.0.0.1:4321" autocomplete="off" spellcheck="false" inputmode="url">
+      </div>
+      <div class="field">
+        <label for="srvToken">Токен із консолі сервера</label>
+        <input id="srvToken" placeholder="local-dev" autocomplete="off" spellcheck="false">
+      </div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap">
+        <button class="btn primary" id="connectBtn">Перевірити зв'язок</button>
+        <button class="btn ghost danger" id="forgetBtn">Забути</button>
+      </div>
+      <div class="note" id="linkStatus" style="margin-top:13px;display:none"></div>
+    </div></div>
+  </section>
+</main>
+
+<div class="switch" id="switch">
+  <button data-pane="files">Файли</button>
+  <button data-pane="code" class="on">Код</button>
+  <button data-pane="out">Вивід</button>
+  <button data-pane="prev">Перегляд</button>
+  <button data-pane="link">ПК</button>
+</div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const B = window.Android;
+const call = (fn, ...a) => { try { return JSON.parse(B[fn](...a)); } catch(e){ return {ok:false,error:String(e)}; } };
+
+const st = { files:[], open:[], active:null, buf:{}, saved:{}, srv:null, running:null };
+
+/* ---------------- вивід ---------------- */
+function out(cls, text){
+  const el=$('out'), s=document.createElement('span');
+  s.className=cls; s.textContent=text; el.appendChild(s);
+  el.parentElement.scrollTop=el.parentElement.scrollHeight;
+  while(el.childNodes.length>600) el.removeChild(el.firstChild);
+}
+const outLine=(c,t)=>out(c,t+'\n');
+
+/* ---------------- файли ---------------- */
+function iconFor(n){
+  const e=(n.split('.').pop()||'').toLowerCase();
+  return ({js:'JS',mjs:'JS',ts:'TS',py:'PY',go:'GO',html:'<>',htm:'<>',css:'#',json:'{}',md:'M'})[e]||'·';
+}
+function renderTree(){
+  $('tree').innerHTML = st.files.length ? st.files.map(f=>
+    '<button class="frow '+(st.active===f.path?'on':'')+'" data-file="'+esc(f.path)+'">'+
+    '<span class="ic">'+(f.dir?'▸':iconFor(f.name))+'</span>'+
+    '<span class="nm">'+esc(f.name)+'</span>'+
+    '<span class="sz">'+(f.dir?'':(f.size>=1024?Math.round(f.size/1024)+'K':f.size+'B'))+'</span></button>'
+  ).join('') : '<div style="padding:16px;color:var(--dim);font-family:var(--mono);font-size:12px">Порожньо. Створи файл кнопкою «+ файл».</div>';
+}
+function loadTree(){
+  const r = call('list');
+  if(r.ok){ st.files = r.files; renderTree(); }
+  else outLine('err','Не вдалося прочитати теку: '+r.error);
+}
+
+/* ---------------- вкладки / редактор ---------------- */
+function renderTabs(){
+  $('tabs').innerHTML = st.open.map(p=>
+    '<button data-tab="'+esc(p)+'" class="'+(st.active===p?'on':'')+'">'+
+    (st.buf[p]!==st.saved[p]?'<span class="dirty">●</span>':'')+esc(p)+'</button>').join('');
+}
+function syncGutter(){
+  const ed=$('editor'), g=$('gutter');
+  const n=(ed.value.match(/\n/g)||[]).length+1;
+  let s=''; for(let i=1;i<=n;i++) s+=i+'\n';
+  g.textContent=s; g.scrollTop=ed.scrollTop;
+}
+function openFile(p){
+  if(st.buf[p]===undefined){
+    const r=call('read',p);
+    if(!r.ok){ outLine('err',r.error); return; }
+    st.buf[p]=r.content; st.saved[p]=r.content;
+  }
+  if(!st.open.includes(p)) st.open.push(p);
+  st.active=p; $('editor').value=st.buf[p];
+  renderTabs(); renderTree(); syncGutter(); setPane('code');
+}
+function saveActive(){
+  if(!st.active) return false;
+  const r=call('write',st.active,st.buf[st.active]);
+  if(r.ok){ st.saved[st.active]=st.buf[st.active]; renderTabs(); B.toast('Збережено'); return true; }
+  outLine('err',r.error); return false;
+}
+
+/* ---------------- запуск ---------------- */
+const extOf = p => (p.split('.').pop()||'').toLowerCase();
+
+function runLocalJs(code){
+  setPane('out');
+  outLine('cmd','$ javascript '+st.active+'  (на телефоні)');
+  const bridge =
+    '<scr'+'ipt>(function(){var send=function(t,a){parent.postMessage({__ide:1,t:t,' +
+    'm:Array.prototype.map.call(a,function(x){try{return (x&&typeof x==="object")?JSON.stringify(x):String(x)}' +
+    'catch(e){return String(x)}}).join(" ")},"*")};' +
+    '["log","warn","error","info"].forEach(function(k){var o=console[k]?console[k].bind(console):function(){};' +
+    'console[k]=function(){send(k,arguments);o.apply(null,arguments)}});' +
+    'window.onerror=function(m,s,l){send("error",[m+" (рядок "+l+")"]);return false};' +
+    '})()</scr'+'ipt>';
+  const fr=document.createElement('iframe');
+  fr.setAttribute('sandbox','allow-scripts');
+  fr.style.display='none';
+  fr.srcdoc = bridge + '<scr'+'ipt>\n' + code + '\n</scr'+'ipt>';
+  document.body.appendChild(fr);
+  setTimeout(()=>{ outLine('sys','[виконано]'); fr.remove(); }, 1500);
+}
+
+function buildPreviewDoc(){
+  const htmlFile = /\.html?$/i.test(st.active||'') ? st.active
+    : (st.files.find(f=>/\.html?$/i.test(f.name))||{}).path;
+  if(!htmlFile) return null;
+  const readFile = p => {
+    if(st.buf[p]!==undefined) return st.buf[p];
+    const r=call('read',p); return r.ok?r.content:'';
+  };
+  let html = readFile(htmlFile);
+  html = html.replace(/<link[^>]+href\s*=\s*["']([^"']+\.css)["'][^>]*>/ig,
+    (m,f)=>'<style>\n'+readFile(f)+'\n</style>');
+  html = html.replace(/<script[^>]+src\s*=\s*["']([^"']+\.js)["'][^>]*>\s*<\/script>/ig,
+    (m,f)=>'<scr'+'ipt>\n'+readFile(f)+'\n</scr'+'ipt>');
+  return {file:htmlFile, doc:html};
+}
+function showPreview(){
+  const r=buildPreviewDoc();
+  if(!r){ outLine('warn','У теці немає HTML-файла'); setPane('out'); return; }
+  $('prevTitle').textContent='Перегляд · '+r.file;
+  $('prevFrame').srcdoc=r.doc;
+  setPane('prev');
+}
+
+async function runRemote(){
+  if(!st.srv){ outLine('warn','Спочатку налаштуй зв\'язок із комп\'ютером — вкладка «ПК».'); setPane('link'); return; }
+  setPane('out');
+  const remotePath = 'phone/' + st.active;      // код із телефона живе на ПК окремо
+  const H = {'Content-Type':'application/json','x-ide-token':st.srv.token};
+  try{
+    // спершу переносимо вміст файла на комп'ютер, інакше виконався б чужий файл
+    const up = await fetch(st.srv.url+'/api/file',{
+      method:'POST', headers:H,
+      body:JSON.stringify({path:remotePath, content:st.buf[st.active]})
+    });
+    const uj = await up.json();
+    if(uj.error) throw new Error(uj.error);
+    outLine('sys','↑ надіслано на комп\'ютер: '+remotePath);
+
+    const res = await fetch(st.srv.url+'/api/run',{
+      method:'POST', headers:H,
+      body:JSON.stringify({path:remotePath})
+    });
+    const j = await res.json();
+    if(j.error){ outLine('err','⚠ '+j.error); return; }
+    if(j.preview){ outLine('sys','Сервер каже: це HTML — відкрий «Перегляд».'); return; }
+    st.running=j.id;
+    $('stopBtn').disabled=false;
+  }catch(e){
+    outLine('err','Немає зв\'язку з комп\'ютером: '+e.message);
+    outLine('sys','Перевір, що сервер запущено і адреса правильна (вкладка «ПК»).');
+  }
+}
+
+function runActive(){
+  if(!st.active){ B.toast('Обери файл'); return; }
+  if(!saveActive()) return;
+  const e = extOf(st.active);
+  if(e==='html'||e==='htm'||e==='css') return showPreview();
+  if(e==='js' && !st.srv) return runLocalJs(st.buf[st.active]);
+  if(e==='js' && st.srv) return runRemote();          // на ПК — справжній Node.js
+  return runRemote();                                  // py, go, ts…
+}
+
+/* ---------------- зв'язок із ПК ---------------- */
+let evtSrc=null;
+function connectStream(){
+  if(evtSrc){ evtSrc.close(); evtSrc=null; }
+  if(!st.srv) return;
+  try{
+    evtSrc = new EventSource(st.srv.url+'/api/events?t='+encodeURIComponent(st.srv.token));
+    evtSrc.onmessage = e=>{
+      let m; try{ m=JSON.parse(e.data); }catch(_){ return; }
+      if(m.t==='start'){ outLine('cmd','$ '+m.label); $('stopBtn').disabled=false; }
+      else if(m.t==='out') out('log',m.data);
+      else if(m.t==='err') out('err',m.data);
+      else if(m.t==='exit'){ outLine(m.code===0?'sys':'warn','[код виходу '+m.code+']');
+        st.running=null; $('stopBtn').disabled=true; }
+    };
+  }catch(e){}
+}
+function setLink(srv){
+  st.srv=srv;
+  try{ localStorage.setItem('ide_srv', srv?JSON.stringify(srv):''); }catch(e){}
+  const p=$('linkPill');
+  p.textContent = srv? 'ПК: на звʼязку' : 'ПК: —';
+  p.className = 'link'+(srv?' on':'');
+  connectStream();
+}
+async function testConnection(){
+  const url=$('srvUrl').value.trim().replace(/\/+$/,'') || 'http://127.0.0.1:4321';
+  const token=$('srvToken').value.trim();
+  const box=$('linkStatus'); box.style.display=''; box.textContent='Перевіряю…';
+  try{
+    const res=await fetch(url+'/api/state',{headers:{'x-ide-token':token}});
+    const j=await res.json();
+    if(j.error) throw new Error(j.error);
+    box.innerHTML='<b style="color:var(--green)">Зв\'язок є.</b><br>'+
+      'Тека: <code>'+esc(j.root)+'</code><br>'+
+      'node: '+esc(j.tools.node||'—')+'<br>python: '+esc(j.tools.python||'—')+
+      '<br>go: '+esc(j.tools.go||'не встановлено');
+    setLink({url,token});
+    outLine('sys','Зв\'язок із комп\'ютером встановлено: '+url);
+  }catch(e){
+    box.innerHTML='<b style="color:var(--red)">Не вийшло:</b> '+esc(e.message)+
+      '<br>Перевір, що сервер запущено, адреса правильна, а телефон у тій самій мережі.';
+  }
+}
+
+/* ---------------- панелі ---------------- */
+function setPane(n){
+  document.body.dataset.pane=n;
+  document.querySelectorAll('#switch button').forEach(b=>b.classList.toggle('on', b.dataset.pane===n));
+  if(n==='code') setTimeout(syncGutter,0);
+}
+window.__onBack = function(){
+  const p=document.body.dataset.pane;
+  if(p!=='code'){ setPane('code'); return true; }
+  return false;
+};
+
+/* ---------------- події ---------------- */
+window.addEventListener('message', e=>{
+  const d=e.data;
+  if(d && d.__ide===1) out(d.t==='error'?'err':'log', d.m+'\n');
+});
+
+$('tree').addEventListener('click', e=>{
+  const b=e.target.closest('[data-file]'); if(b) openFile(b.dataset.file);
+});
+$('tabs').addEventListener('click', e=>{
+  const b=e.target.closest('[data-tab]'); if(b) openFile(b.dataset.tab);
+});
+$('switch').addEventListener('click', e=>{
+  const b=e.target.closest('[data-pane]'); if(b) setPane(b.dataset.pane);
+});
+$('linkPill').addEventListener('click', ()=>setPane('link'));
+
+const ed=$('editor');
+ed.addEventListener('input', ()=>{ if(st.active) st.buf[st.active]=ed.value; renderTabs(); syncGutter(); });
+ed.addEventListener('scroll', ()=>{ $('gutter').scrollTop=ed.scrollTop; });
+
+/* швидкі клавіші для телефона */
+const KEYS=['  ','(',')','{','}','[',']','<','>','=',';',':',"'",'"','_','-','+','*','/','$','&','|','!','.',','];
+$('keys').innerHTML = KEYS.map(k=>'<button data-k="'+esc(k)+'">'+(k==='  '?'⇥':esc(k))+'</button>').join('');
+$('keys').addEventListener('click', e=>{
+  const b=e.target.closest('[data-k]'); if(!b) return;
+  const k=b.dataset.k, s=ed.selectionStart, en=ed.selectionEnd;
+  ed.value = ed.value.slice(0,s)+k+ed.value.slice(en);
+  ed.selectionStart=ed.selectionEnd=s+k.length;
+  if(st.active) st.buf[st.active]=ed.value;
+  ed.focus(); renderTabs(); syncGutter();
+});
+
+$('runBtn').onclick=runActive;
+$('saveBtn').onclick=saveActive;
+$('reloadBtn').onclick=()=>{ loadTree(); B.toast('Оновлено'); };
+$('clearOutBtn').onclick=()=>{ $('out').textContent=''; };
+$('prevReload').onclick=showPreview;
+$('connectBtn').onclick=testConnection;
+$('forgetBtn').onclick=()=>{ setLink(null); $('linkStatus').style.display='none'; };
+$('stopBtn').onclick=async()=>{
+  if(!st.srv) return;
+  try{ await fetch(st.srv.url+'/api/stop',{method:'POST',
+    headers:{'Content-Type':'application/json','x-ide-token':st.srv.token},
+    body:JSON.stringify({id:st.running})}); }catch(e){}
+};
+$('newBtn').onclick=()=>{
+  const name=prompt('Ім\'я файла (напр. main.py, script.js, page.html)');
+  if(!name) return;
+  const r=call('create',name,false);
+  if(!r.ok){ B.toast(r.error); return; }
+  loadTree(); openFile(name);
+};
+$('delBtn').onclick=()=>{
+  if(!st.active) return B.toast('Обери файл');
+  if(!confirm('Видалити «'+st.active+'»?')) return;
+  const p=st.active, r=call('delete',p);
+  if(!r.ok) return B.toast(r.error);
+  st.open=st.open.filter(x=>x!==p); delete st.buf[p]; delete st.saved[p];
+  st.active=st.open[st.open.length-1]||null;
+  ed.value = st.active? st.buf[st.active] : '';
+  loadTree(); renderTabs(); syncGutter();
+};
+
+/* ---------------- старт ---------------- */
+(function(){
+  $('wsPath').textContent = 'Файли · ' + (B ? B.workspacePath().split('/').slice(-2).join('/') : '—');
+  loadTree();
+  try{
+    const raw=localStorage.getItem('ide_srv');
+    if(raw){ const s=JSON.parse(raw); $('srvUrl').value=s.url; $('srvToken').value=s.token; setLink(s); }
+    else { $('srvUrl').value='http://127.0.0.1:4321'; setLink(null); }
+  }catch(e){ setLink(null); }
+  outLine('sys','IDE_IT — робоче місце на телефоні.');
+  outLine('sys','HTML, CSS і JavaScript виконуються тут. Python, Node.js і Go — через комп\'ютер (вкладка «ПК»).');
+  const first = st.files.find(f=>!f.dir && /\.(js|html|py|go|css)$/i.test(f.name));
+  if(first) openFile(first.path); else setPane('files');
+})();
+</script>
+</body>
+</html>

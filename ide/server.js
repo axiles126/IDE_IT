@@ -288,12 +288,21 @@ const MIME = {
   '.wasm': 'application/wasm', '.woff2': 'font/woff2'
 };
 
+/* Заголовки для мобільного клієнта: сторінка застосунку має origin "null",
+   тому дозволяємо будь-який — доступ усе одно закритий токеном. */
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'content-type, x-ide-token',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Max-Age': '600'
+};
+
 function send(res, code, body, type = 'application/json; charset=utf-8', extra = {}) {
   res.writeHead(code, Object.assign({
     'Content-Type': type,
     'Cache-Control': 'no-store',
     'X-Content-Type-Options': 'nosniff'
-  }, extra));
+  }, CORS, extra));
   res.end(body);
 }
 const json = (res, code, obj) => send(res, code, JSON.stringify(obj));
@@ -318,6 +327,9 @@ function readBody(req, limit = MAX_FILE + 4096) {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1');
   const p = decodeURIComponent(url.pathname);
+
+  /* попередній запит браузера перед POST з іншого походження */
+  if (req.method === 'OPTIONS') { res.writeHead(204, CORS); return res.end(); }
 
   /* сторінка IDE */
   if (p === '/' || p === '/index.html') {
@@ -349,11 +361,11 @@ const server = http.createServer(async (req, res) => {
   try {
     /* потік подій */
     if (p === '/api/events') {
-      res.writeHead(200, {
+      res.writeHead(200, Object.assign({
         'Content-Type': 'text/event-stream; charset=utf-8',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive'
-      });
+      }, CORS));
       res.write(': ok\n\n');
       clients.add(res);
       const ping = setInterval(() => { try { res.write(': ping\n\n'); } catch {} }, 25000);
